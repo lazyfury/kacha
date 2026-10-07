@@ -8,6 +8,7 @@ import SwiftUI
 @MainActor
 final class RecordingBarModel: ObservableObject {
     @Published var elapsed: TimeInterval = 0
+    @Published var micMuted = false
 }
 
 @MainActor
@@ -18,15 +19,18 @@ final class RecordingBar {
 
     var onStop: (() -> Void)?
     var onCancel: (() -> Void)?
+    var onToggleMic: (() -> Void)?
 
     var isOpen: Bool { panel != nil }
 
     /// Show the bar. `elapsed` is polled for the timer (the recorder's own
-    /// `recordedDuration`).
-    func show(elapsed: @escaping () -> TimeInterval) {
+    /// `recordedDuration`). The mic button only appears when `micAvailable`.
+    func show(micAvailable: Bool, elapsed: @escaping () -> TimeInterval) {
         close()
         let root = RecordingBarView(
             model: model,
+            micAvailable: micAvailable,
+            onToggleMic: { [weak self] in self?.onToggleMic?() },
             onStop: { [weak self] in self?.onStop?() },
             onCancel: { [weak self] in self?.onCancel?() }
         )
@@ -69,6 +73,11 @@ final class RecordingBar {
         timer = nil
         panel?.orderOut(nil)
         panel = nil
+    }
+
+    /// Reflect the microphone's mute state on the button.
+    func setMicMuted(_ muted: Bool) {
+        model.micMuted = muted
     }
 
     /// Top-centre of the display under the cursor, just below the menu bar.

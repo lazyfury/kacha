@@ -416,6 +416,12 @@ enum SelfCheck {
             Export.timestampedName(extension: "mp4").hasSuffix(".mp4"),
             "movie name uses the mp4 extension"
         )
+        check(RecordingContainer.mp4.fileExtension == "mp4", "container maps to a file extension")
+        check(
+            RecordingAudio.allCases == [.none, .system, .microphone],
+            "audio sources are none / system / microphone"
+        )
+        check(RecordingFrameRate.allCases.map(\.rawValue) == [30, 60], "frame rates are 30 / 60")
     }
 
     /// The fallback must always resolve; the exact system capture sound is not a

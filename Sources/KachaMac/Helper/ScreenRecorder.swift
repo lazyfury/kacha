@@ -17,6 +17,9 @@ final class ScreenRecorder: NSObject {
     private var cancelled = false
     private var reported = false
 
+    /// Host-clock time when capture started, for aligning a separate microphone.
+    private(set) var startedAt: CMTime = .invalid
+
     /// Called once when the recording ends: `.success` with the written file,
     /// `.failure` on error or when the user cancelled.
     var onFinish: ((Result<URL, Error>) -> Void)?
@@ -30,7 +33,7 @@ final class ScreenRecorder: NSObject {
     }
 
     /// Start recording `target` into `url`.
-    func start(target: RecordingTarget, to url: URL) async throws {
+    func start(target: RecordingTarget, options: RecordingConfig, to url: URL) async throws {
         let content = try await SCShareableContent.excludingDesktopWindows(
             false,
             onScreenWindowsOnly: true
@@ -41,6 +44,7 @@ final class ScreenRecorder: NSObject {
         }
         let (filter, configuration) = try Self.streamConfig(
             for: target,
+            options: options,
             content: content,
             excluding: ownWindows
         )
@@ -49,14 +53,15 @@ final class ScreenRecorder: NSObject {
 
         let outputConfig = SCRecordingOutputConfiguration()
         outputConfig.outputURL = url
-        outputConfig.videoCodecType = .h264
-        outputConfig.outputFileType = .mp4
+        outputConfig.videoCodecType = Self.codec(options.codec)
+        outputConfig.outputFileType = Self.fileType(options.container)
         let output = SCRecordingOutput(configuration: outputConfig, delegate: self)
         try stream.addRecordingOutput(output)
 
         self.stream = stream
         self.output = output
         self.url = url
+        startedAt = CMClockGetTime(CMClockGetHostTimeClock())
         try await stream.startCapture()
     }
 
@@ -81,16 +86,38 @@ final class ScreenRecorder: NSObject {
 
     // MARK: - Configuration
 
+    /// The AV codec for a recording codec choice.
+    private static func codec(_ codec: RecordingCodec) -> AVVideoCodecType {
+        switch codec {
+        case .h264: return .h264
+        case .hevc: return .hevc
+        }
+    }
+
+    /// The AV file type for a container choice.
+    private static func fileType(_ container: RecordingContainer) -> AVFileType {
+        switch container {
+        case .mp4: return .mp4
+        case .mov: return .mov
+        }
+    }
+
     private static func streamConfig(
         for target: RecordingTarget,
+        options: RecordingConfig,
         content: SCShareableContent,
         excluding ownWindows: [SCWindow]
     ) throws -> (SCContentFilter, SCStreamConfiguration) {
         let config = SCStreamConfiguration()
-        config.minimumFrameInterval = CMTime(value: 1, timescale: 30)
+        config.minimumFrameInterval = CMTime(
+            value: 1,
+            timescale: CMTimeScale(options.frameRate.rawValue)
+        )
         config.queueDepth = 6
-        config.showsCursor = true
-        config.capturesAudio = false
+        config.showsCursor = options.showCursor
+        config.showMouseClicks = options.showClicks
+        config.capturesAudio = options.audio == .system
+        config.excludesCurrentProcessAudio = true
 
         let filter: SCContentFilter
         switch target {

@@ -5,6 +5,8 @@ import SwiftUI
 
 struct RecordingBarView: View {
     @ObservedObject var model: RecordingBarModel
+    let micAvailable: Bool
+    let onToggleMic: () -> Void
     let onStop: () -> Void
     let onCancel: () -> Void
 
@@ -19,6 +21,14 @@ struct RecordingBarView: View {
                 .frame(minWidth: 52, alignment: .leading)
             Divider()
                 .frame(height: 18)
+            if micAvailable {
+                barButton(
+                    model.micMuted ? "mic.slash.fill" : "mic.fill",
+                    help: model.micMuted ? "打开麦克风" : "关闭麦克风",
+                    active: !model.micMuted,
+                    action: onToggleMic
+                )
+            }
             barButton("stop.fill", help: "停止并保存", action: onStop)
             barButton("xmark", help: "取消并丢弃", action: onCancel)
         }
@@ -30,12 +40,14 @@ struct RecordingBarView: View {
     private func barButton(
         _ symbol: String,
         help: String,
+        active: Bool = false,
         action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {
             Image(systemName: symbol)
                 .font(.system(size: 13, weight: .semibold))
                 .frame(width: 26, height: 24)
+                .foregroundStyle(active ? Color.accentColor : Color.primary)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

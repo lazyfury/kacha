@@ -21,9 +21,11 @@ macOS 截图工具。**纯 Swift**：AppKit 管窗口、Core Graphics 画界面�
   菜单、悬停态等）。
 - **全屏截图**（默认 `⌘⇧F`）：直接抓鼠标所在显示器进编辑窗，不走覆盖层。
 - **看图**：菜单栏开一个空编辑窗（按钮禁用），把图片拖进来即进入和截图一样的编辑流程。
-- **录制屏幕**（默认 `⌘⇧R`，macOS 15+）：区域 / 窗口 / 整屏录成 H.264 mp4。复用冻结 +
-  覆盖层选区；确认后弹悬浮控制栏（计时 / 停止 / 取消）。窗口录制**不依赖顶层**，被遮挡的
-  窗口也能录。有保存目录就直写，否则停止后弹保存面板。
+- **录制屏幕**（默认 `⌘⇧R`，macOS 15+）：区域 / 窗口 / 整屏录成 mp4 / mov。复用冻结 +
+  覆盖层选区；确认后弹悬浮控制栏（计时 / 停止 / 取消，麦克风实时开关）。窗口录制**不依赖顶层**，
+  被遮挡的窗口也能录。设置里可选帧率 / 编码 / 容器 / 音频来源 / 倒数 / 光标 / 点击高亮；
+  有保存目录就直写，否则停止后弹保存面板。麦克风是独立采集（需打包 `.app`）。录制中菜单项
+  禁用并显示「正在录制…」，不能开新会话。
 - **取色器**（默认 `⌘⇧C`）：在冻帧上取样，放大镜 + hex 读数；点击或 `Enter` 复制 hex，
   `Esc` 取消。
 - **编辑窗**：矩形（可填充）/ 椭圆（可填充）/ 直线 / 箭头 / 画笔 / 文字（支持 IME，
@@ -33,7 +35,8 @@ macOS 截图工具。**纯 Swift**：AppKit 管窗口、Core Graphics 画界面�
   结果 sheet 可逐条或全部复制。钉图是可交互的置顶悬浮图：拖拽移动、**拖四角缩放
   （锁宽高比）**、悬停左上角关闭、右键菜单（复制 / 保存 / 关闭）、双击或 `Esc` 关闭；
   菜单栏还有「关闭所有钉图」。
-- **设置**：自定义截图 / 全屏 / 取色三个全局热键、延时截图、保存目录、提示音、开机自启。
+- **设置**：左侧边栏分页（通用 / 快捷键 / 录制 / 保存），对齐 macOS 26 系统设置；可改四个全局
+  热键、录制编码与音频、保存目录、延时、提示音、开机自启。
 - 截图与导出都是**原生像素**（Retina 2x）。
 
 ## 架构
@@ -72,7 +75,7 @@ Sources/KachaMac/
     BarcodeResultView.swift 二维码 / 条码结果 sheet（逐条复制）
     RecordingBarView.swift 录屏控制栏 SwiftUI（计时 / 停止 / 取消）
     SettingsWindow.swift  设置窗（NSWindow 宿主）
-    SettingsRootView.swift 设置窗 SwiftUI：系统设置风顶栏 / 分组卡片 / 底部动作栏
+    SettingsRootView.swift 设置窗 SwiftUI：系统设置风侧边栏 + 分组按钮 + 卡片
     HotkeyRecorderView.swift SwiftUI 热键录制按钮 + 本地 NSEvent 监听
   Helper/                 系统能力与工具
     Hotkeys.swift         Carbon RegisterEventHotKey（无需辅助功能权限）
@@ -84,6 +87,8 @@ Sources/KachaMac/
     OCR.swift             VisionKit 文本分析 / 合并换行
     Barcode.swift         Vision 二维码 / 条码解码
     ScreenRecorder.swift  SCStream + SCRecordingOutput 录屏后端（macOS 15+）
+    MicRecorder.swift     独立麦克风采集（AVCaptureSession → m4a，实时静音）
+    RecordingMuxer.swift  视频 + 麦克风合流（AVMutableComposition）
     ShotSound.swift       系统截图提示音
     SelfCheck.swift       `--selfcheck` 纯逻辑断言
 

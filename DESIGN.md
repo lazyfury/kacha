@@ -108,7 +108,7 @@ kacha/
 │   │       ├── BarcodeResultView.swift  # 二维码 / 条码结果 sheet（逐条复制）
 │   │       ├── RecordingBarView.swift   # 录屏控制栏 SwiftUI（计时 / 停止 / 取消）
 │   │       ├── SettingsWindow.swift     # 设置窗（NSWindow 宿主）
-│   │       ├── SettingsRootView.swift   # 设置窗：系统设置风顶栏 / 卡片 / 底栏
+│   │       ├── SettingsRootView.swift   # 设置窗：系统设置风侧边栏 / 分组按钮 / 卡片
 │   │       └── HotkeyRecorderView.swift # 热键录制按钮 + 本地 NSEvent 监听
 │   └── Helper/                   # 系统能力与工具
 │       ├── Hotkeys.swift         # Carbon RegisterEventHotKey
@@ -120,6 +120,8 @@ kacha/
 │       ├── OCR.swift             # VisionKit 文本分析 + 合并换行
 │       ├── Barcode.swift         # Vision 二维码 / 条码解码
 │       ├── ScreenRecorder.swift  # SCStream + SCRecordingOutput 录屏后端（15+）
+│       ├── MicRecorder.swift     # 独立麦克风采集（AVCaptureSession → m4a）
+│       ├── RecordingMuxer.swift  # 视频 + 麦克风合流（AVMutableComposition）
 │       ├── ShotSound.swift       # 系统截图提示音
 │       └── SelfCheck.swift       # --selfcheck 纯逻辑断言
 ├── packaging/Info.plist          # LSUIElement=true、LSMinimumSystemVersion=14.0
@@ -228,12 +230,12 @@ marker 工具，用 `defaultMarkerStroke`（最小 16px）的粗笔刷。
   `WindowDragArea` 拖拽把手（调 `performDrag`）。当前工具用 accent 胶囊标记。窗口
   `contentMinSize = 840×460`；`titlebarAppearsTransparent` + `titleVisibility = .hidden` +
   `titlebarSeparatorStyle = .none`。
-- **设置窗**：对齐 macOS 26 系统设置的观感。窗口用 `.fullSizeContentView` +
-  `titlebarAppearsTransparent` + `titleVisibility = .hidden`，SwiftUI 自己画顶栏标题
-  （左边距避开红绿灯）、原生 `Form(.grouped)` 卡片和底部动作栏。分节标题 / 说明是卡片内的
-  第一行（不再是卡外的 `Section` header，也不带 SF Symbol 图标）；热键是普通 SwiftUI
-  `Button`（走系统 26 的按钮 chrome），不再是 AppKit `NSButton`。按键捕获用本地 `NSEvent`
-  监听：`NSEvent.addLocalMonitorForEvents(matching: [.keyDown])`。
+- **设置窗**：对齐 macOS 26 系统设置的观感。窗口 `.fullSizeContentView` +
+  `titlebarAppearsTransparent`（标题保持可见），里面是经典 `NavigationSplitView`：
+  左边 `List(.sidebar)`（`navigationSplitViewColumnWidth`，系统自动让侧栏铺满红绿灯区），
+  右边详情用原生 `Form(.grouped)` 卡片，选项用 `.pickerStyle(.segmented)` 的分组按钮；
+  帮助按钮放 `.toolbar`。分节标题 / 说明是卡片内的第一行；热键是普通 SwiftUI `Button`。
+  按键捕获用本地 `NSEvent` 监听：`NSEvent.addLocalMonitorForEvents(matching: [.keyDown])`。
 
 ### 4.9 钉图
 
@@ -294,7 +296,18 @@ Core Image 的 `CIQRCodeGenerator` 生成一个 QR 再解码断言（`--smoke-ba
   `SCRecordingOutput.recordedDuration`。
 - **保存**：有保存目录就直写（`Export.recordingDestination` 去重），否则先写临时文件，
   停止后用 `Export.saveMovie` 弹保存面板；结果弹窗给「在 Finder 显示」。
-- **测试**：`--selfcheck` 覆盖几何 / 时长 / 文件名；`--smoke-record` 开 / 关控制栏
+- **设置**（设置窗「录制」分组，segmented 按钮组）：帧率 30/60、编码 H.264/HEVC、容器 MP4/MOV、
+  音频来源 无 / 系统声音 / 麦克风、开始前倒数、显示光标、点击高亮。`Preferences.recordingConfig`
+  持久化，`ScreenRecorder` 映射到 `SCStreamConfiguration` / `SCRecordingOutputConfiguration`。
+- **麦克风**：`SCRecordingOutput` 录制中改配置会**中断录制**，所以麦克风不能用 `SCStream`
+  实时开关。改为 `MicRecorder`（`AVCaptureSession` + `AVAssetWriter` 写 m4a）独立采集，
+  录制中用 mute 标志跳过采样实现实时开关；停止后用 `RecordingMuxer`（`AVMutableComposition`
+  + `AVAssetExportSession` 直通）把视频和麦克风合流，并按主机时钟偏移对齐。需要打包 `.app`
+  且 `Info.plist` 有 `NSMicrophoneUsageDescription`，裸二进制不启用（否则请求权限会崩）。
+- **单会话**：确认录制目标后 `recordingActive` 置位，直到录制结束；期间菜单栏录屏项禁用
+  （标题改「正在录制…」），再按热键 / 菜单直接返回。状态栏图标**不变**——系统已自带录制指示，
+  再换图标只会多一个重复的“stop”。
+- **测试**：`--selfcheck` 覆盖几何 / 时长 / 文件名 / 配置枚举；`--smoke-record` 开 / 关控制栏
   （不真录屏、不需要权限）。
 
 ---

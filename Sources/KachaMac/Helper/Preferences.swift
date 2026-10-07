@@ -110,6 +110,39 @@ enum Preferences {
     /// The delayed-capture presets, in seconds (0 first, ascending).
     static let delayChoices = [0, 3, 5, 10]
 
+    /// The countdown-before-recording presets, in seconds.
+    static let countdownChoices = [0, 3, 5]
+
+    /// The recording options, persisted as raw values.
+    static var recordingConfig: RecordingConfig {
+        get {
+            RecordingConfig(
+                frameRate: RecordingFrameRate(
+                    rawValue: defaults.object(forKey: "recordFPS") as? Int ?? 30
+                ) ?? .fps30,
+                codec: RecordingCodec(rawValue: defaults.string(forKey: "recordCodec") ?? "")
+                    ?? .h264,
+                container: RecordingContainer(
+                    rawValue: defaults.string(forKey: "recordContainer") ?? ""
+                ) ?? .mp4,
+                audio: RecordingAudio(rawValue: defaults.string(forKey: "recordAudio") ?? "")
+                    ?? .none,
+                showCursor: defaults.object(forKey: "recordShowCursor") as? Bool ?? true,
+                showClicks: defaults.object(forKey: "recordShowClicks") as? Bool ?? false,
+                countdown: defaults.object(forKey: "recordCountdown") as? Int ?? 0
+            )
+        }
+        set {
+            defaults.set(newValue.frameRate.rawValue, forKey: "recordFPS")
+            defaults.set(newValue.codec.rawValue, forKey: "recordCodec")
+            defaults.set(newValue.container.rawValue, forKey: "recordContainer")
+            defaults.set(newValue.audio.rawValue, forKey: "recordAudio")
+            defaults.set(newValue.showCursor, forKey: "recordShowCursor")
+            defaults.set(newValue.showClicks, forKey: "recordShowClicks")
+            defaults.set(newValue.countdown, forKey: "recordCountdown")
+        }
+    }
+
     /// The folder a capture is saved into without a panel, or nil to always ask.
     /// Stored as a bookmark (not a raw path) so it survives the folder being
     /// renamed or moved.

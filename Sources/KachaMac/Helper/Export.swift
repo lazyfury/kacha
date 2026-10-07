@@ -84,43 +84,47 @@ enum Export {
         }
     }
 
-    /// Where to write a recording. With a save directory configured, writes
-    /// straight there (deduplicated); otherwise a temporary file the caller moves
-    /// with `saveMovie` after the user picks a location.
-    static func recordingDestination() -> (url: URL, temporary: Bool) {
-        let name = timestampedName(extension: "mp4")
+    /// A temporary URL for a recording. The finished file is placed with
+    /// `saveMovie` (save directory or panel) once recording ends.
+    static func recordingDestination(container: RecordingContainer) -> URL {
+        FileManager.default.temporaryDirectory
+            .appendingPathComponent("kacha-\(UUID().uuidString).\(container.fileExtension)")
+    }
+
+    /// Place a finished recording: straight into the configured save directory
+    /// (deduplicated), or a save panel. Returns the final URL, or nil when the
+    /// user cancels (the temp file is removed).
+    static func saveMovie(at tempURL: URL) -> URL? {
+        let manager = FileManager.default
         if let directory = Preferences.saveDirectory {
-            let manager = FileManager.default
             do {
                 try manager.createDirectory(at: directory, withIntermediateDirectories: true)
                 let existing = Set(
                     (try? manager.contentsOfDirectory(atPath: directory.path)) ?? []
                 )
-                let url = directory.appendingPathComponent(
-                    deduplicatedName(name, existing: existing)
+                let name = deduplicatedName(
+                    timestampedName(extension: tempURL.pathExtension),
+                    existing: existing
                 )
-                return (url, false)
+                let destination = directory.appendingPathComponent(name)
+                try manager.moveItem(at: tempURL, to: destination)
+                return destination
             } catch {
                 present("保存失败", error.localizedDescription)
+                return nil
             }
         }
-        let temp = FileManager.default.temporaryDirectory
-            .appendingPathComponent("kacha-\(UUID().uuidString).mp4")
-        return (temp, true)
-    }
 
-    /// Move a temporary recording to a user-chosen location. Returns the final
-    /// URL, or nil when the user cancels (the temp file is removed).
-    static func saveMovie(at tempURL: URL) -> URL? {
         let panel = NSSavePanel()
-        panel.allowedContentTypes = [.mpeg4Movie]
-        panel.nameFieldStringValue = tempURL.lastPathComponent
+        panel.allowedContentTypes = [
+            tempURL.pathExtension == "mov" ? .quickTimeMovie : .mpeg4Movie
+        ]
+        panel.nameFieldStringValue = timestampedName(extension: tempURL.pathExtension)
         panel.canCreateDirectories = true
         guard panel.runModal() == .OK, let destination = panel.url else {
-            try? FileManager.default.removeItem(at: tempURL)
+            try? manager.removeItem(at: tempURL)
             return nil
         }
-        let manager = FileManager.default
         try? manager.removeItem(at: destination)
         do {
             try manager.moveItem(at: tempURL, to: destination)

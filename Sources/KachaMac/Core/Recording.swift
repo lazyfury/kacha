@@ -83,3 +83,55 @@ func formatDuration(_ seconds: TimeInterval) -> String {
     }
     return String(format: "%02d:%02d", minutes, secs)
 }
+
+/// Recording frame rate.
+enum RecordingFrameRate: Int, CaseIterable {
+    case fps30 = 30
+    case fps60 = 60
+
+    var label: String { "\(rawValue) fps" }
+}
+
+/// Video codec.
+enum RecordingCodec: String, CaseIterable {
+    case h264
+    case hevc
+
+    var label: String { self == .h264 ? "H.264" : "HEVC" }
+}
+
+/// Container / file type.
+enum RecordingContainer: String, CaseIterable {
+    case mp4
+    case mov
+
+    var label: String { rawValue.uppercased() }
+    var fileExtension: String { rawValue }
+}
+
+/// Where the audio comes from. For Phase 2 the sources are mutually exclusive,
+/// which keeps one audio track (and lets the microphone be muted live).
+enum RecordingAudio: String, CaseIterable {
+    case none
+    case system
+    case microphone
+
+    var label: String {
+        switch self {
+        case .none: return "无"
+        case .system: return "系统声音"
+        case .microphone: return "麦克风"
+        }
+    }
+}
+
+/// A snapshot of the recording options, built from Preferences.
+struct RecordingConfig: Equatable {
+    var frameRate: RecordingFrameRate = .fps30
+    var codec: RecordingCodec = .h264
+    var container: RecordingContainer = .mp4
+    var audio: RecordingAudio = .none
+    var showCursor: Bool = true
+    var showClicks: Bool = false
+    var countdown: Int = 0
+}

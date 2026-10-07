@@ -48,7 +48,10 @@ macOS 截图工具。**纯 Swift 应用**：AppKit 管窗口 / 原生事件与�
 - **录屏用 `SCRecordingOutput`（macOS 15+），不是截图那套。** 入口必须
   `if #available(macOS 15.0, *)` 门控（14.0 上隐藏）。`addRecordingOutput` 必须在
   `startCapture` 之前，否则开头几帧不进文件；没有暂停 API；控制栏窗口 `sharingType = .none`
-  + filter 排除自身窗口，否则控制栏会被录进去。详见 `RECORDING.md`。
+  + filter 排除自身窗口，否则控制栏会被录进去。**麦克风不能用 `updateConfiguration` 实时
+  开关**（录制中改 stream 配置会中断录制）：用 `MicRecorder`（AVCaptureSession + AVAssetWriter）
+  独立采集、mute 标志跳过采样，停止后用 `RecordingMuxer` 按主机时钟偏移合流。麦克风需打包
+  `.app` 且 `Info.plist` 有 `NSMicrophoneUsageDescription`，否则请求权限会崩。详见 `RECORDING.md`。
 - **程序化 `NSWindow` / `NSPanel` 必须 `isReleasedWhenClosed = false`。** 默认是 `true`，
   而窗口由 ARC 持有；点红钮 / `performClose` 关闭时 AppKit 释放一次、ARC 再释放一次，
   在 `objc_release` 崩溃（EXC_BAD_ACCESS）。回归：`scripts/run.sh --smoke-editor`
@@ -74,11 +77,12 @@ macOS 截图工具。**纯 Swift 应用**：AppKit 管窗口 / 原生事件与�
   `.unsafeFlags(["-Xlinker", "-platform_version", "-Xlinker", "macos", "-Xlinker", "14.0",
   "-Xlinker", "26.0"])`（minos 保持 14.0，sdk 报 26.0）。验证：`vtool -show-build
   .build/debug/kacha-mac` 要显示 `sdk 26.0`，对比系统设置是 `26.7`。
-- **设置窗对齐 macOS 26 系统设置的观感。** 窗口 `.fullSizeContentView` + 透明无标题
-  titlebar，SwiftUI 自己画顶栏标题（`ignoresSafeArea(edges: .top)` + 左边距避开红绿灯）和
-  底部动作栏。分节标题 / 说明是卡片内第一行（不是卡外的 `Section` header，也不带 SF
-  Symbol）；热键是普通 SwiftUI `Button`（走系统 26 的按钮 chrome），别退回 AppKit
-  `NSButton`——`.automatic`/`.rounded` 是旧灰条，`.glass` bezel 在卡片里几乎看不见。
+- **设置窗对齐 macOS 26 系统设置的观感。** 窗口 `.fullSizeContentView` + 透明标题栏
+  （标题可见），里面用经典 `NavigationSplitView`：侧栏 `List(.sidebar)`（系统自动铺满
+  红绿灯区，**别自己加占位 / 自绘 header**），详情 `Form(.grouped)` 卡片 +
+  `.pickerStyle(.segmented)` 分组按钮；帮助按钮放 `.toolbar`。分节标题 / 说明是卡片内
+  第一行（不是卡外的 `Section` header，也不带 SF Symbol）；热键是普通 SwiftUI `Button`
+  （走系统 26 的按钮 chrome），别退回 AppKit `NSButton`。
 - **标注样式存在标注上，不读全局。** `color` / `stroke` / `filled` 是 `Annotation` 的字段
   （新建时从 `EditorState` 快照）；绘制不要去看 `state.color`。工具栏的面板改的是
   `state.color` / `state.strokeFactor` / `state.rectangleFilled`。文字编辑用
@@ -132,7 +136,7 @@ SwiftPM 递归编译子目录，**加文件夹不用改 `Package.swift`**。
 | 编辑窗 / 画布 / 标注 | `Sources/KachaMac/UI/AppKit/EditorWindow.swift`、`EditorCanvasView.swift`、`AnnotationRenderer.swift`、`Core/Annotate.swift`、`EditorState.swift` |
 | 画布几何 / 马赛克 | `Sources/KachaMac/Core/EditorGeometry.swift`、`Mosaic.swift` |
 | 录屏目标 / 几何 / 计时（纯逻辑） | `Sources/KachaMac/Core/Recording.swift` |
-| 录屏后端（SCRecordingOutput，15+） | `Sources/KachaMac/Helper/ScreenRecorder.swift` |
+| 录屏后端（SCRecordingOutput，15+） | `Sources/KachaMac/Helper/ScreenRecorder.swift`、`MicRecorder.swift`、`RecordingMuxer.swift` |
 | 录屏控制栏 | `Sources/KachaMac/UI/AppKit/RecordingBar.swift`、`UI/SwiftUI/RecordingBarView.swift` |
 | 钉图 / 设置 / 热键录制 | `Sources/KachaMac/UI/AppKit/PinWindows.swift`、`UI/SwiftUI/SettingsWindow.swift`、`HotkeyRecorderView.swift` |
 | 截图提示音（系统音效，无资源文件） | `Sources/KachaMac/Helper/ShotSound.swift` |

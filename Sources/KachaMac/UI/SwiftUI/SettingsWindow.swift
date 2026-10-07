@@ -27,12 +27,16 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         let hosting = NSHostingController(rootView: root)
         let window = NSWindow(contentViewController: hosting)
         window.title = "设置"
-        window.styleMask = [.titled, .closable, .fullSizeContentView]
+        window.styleMask = [.titled, .closable, .resizable, .fullSizeContentView]
         WindowChrome.own(window)
         window.delegate = self
-        // Seamless chrome: the SwiftUI content supplies the title and footer.
-        WindowChrome.seamless(window)
+        // Transparent titlebar so the sidebar fills the traffic-light area; the
+        // title itself stays visible in the unified toolbar.
+        window.titlebarAppearsTransparent = true
+        window.titlebarSeparatorStyle = .none
+        hosting.view.layoutSubtreeIfNeeded()
         window.setContentSize(hosting.view.fittingSize)
+        window.contentMinSize = NSSize(width: 680, height: 480)
 
         window.center()
         window.makeKeyAndOrderFront(nil)

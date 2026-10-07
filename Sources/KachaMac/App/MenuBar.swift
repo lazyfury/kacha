@@ -46,7 +46,9 @@ final class MenuBar: NSObject, NSMenuDelegate {
 
     func install() {
         // A slightly larger menu-bar glyph: configure the symbol and let the
-        // button scale it up as well as down.
+        // button scale it up as well as down. The icon stays the same while
+        // recording — macOS already shows its own recording indicator, so
+        // swapping this one only adds a second, confusing badge.
         let configuration = NSImage.SymbolConfiguration(pointSize: 18, weight: .regular)
         if let image = NSImage(
             systemSymbolName: "camera.viewfinder",
@@ -136,6 +138,13 @@ final class MenuBar: NSObject, NSMenuDelegate {
     /// Refresh the menu state (shortcuts, delay checkmark) just before it opens.
     func menuWillOpen(_ menu: NSMenu) {
         updateShortcuts()
+    }
+
+    /// Reflect the recording state on the record menu item: while recording the
+    /// item is disabled (no second session) and reads "正在录制…".
+    func setRecording(_ recording: Bool) {
+        recordItem?.title = recording ? "正在录制…" : "录制屏幕"
+        recordItem?.isEnabled = !recording
     }
 
     /// Show the current shortcuts next to the menu items.
