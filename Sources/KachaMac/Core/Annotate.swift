@@ -51,10 +51,12 @@ enum ToolbarSymbol {
     static let close = "xmark"
     static let fillOff = "square"
     static let fillOn = "square.fill"
+    static let selectText = "text.cursor"
 
     /// Every symbol the toolbar may show (the self-check resolves them all).
     static var all: [String] {
-        Tool.allCases.map(\.symbol) + [undo, redo, copy, save, pin, close, fillOff, fillOn]
+        Tool.allCases.map(\.symbol)
+            + [undo, redo, copy, save, pin, close, fillOff, fillOn, selectText]
     }
 }
 

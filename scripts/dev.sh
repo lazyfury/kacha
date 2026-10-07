@@ -18,4 +18,6 @@ echo "== smoke: editor =="
 .build/debug/kacha-mac --smoke-editor
 echo "== smoke: export =="
 .build/debug/kacha-mac --smoke-export
+echo "== smoke: ocr =="
+.build/debug/kacha-mac --smoke-ocr
 echo "OK"

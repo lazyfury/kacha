@@ -88,7 +88,7 @@ macOS 截图工具。**纯 Swift 应用**：AppKit 管窗口 / 原生事件与�
 ## 构建与验证
 
 ```bash
-./scripts/dev.sh                     # swift build + selfcheck + 三个 smoke
+./scripts/dev.sh                     # swift build + selfcheck + 四个 smoke
 ```
 
 单独：
@@ -99,6 +99,7 @@ swift build                          # 仓库根 Package.swift
 scripts/run.sh --smoke-settings
 scripts/run.sh --smoke-editor
 scripts/run.sh --smoke-export
+scripts/run.sh --smoke-ocr
 scripts/package.sh                   # 组装 dist/kacha.app
 ```
 
@@ -122,5 +123,7 @@ SwiftPM 递归编译子目录，**加文件夹不用改 `Package.swift`**。
 | 画布几何 / 马赛克 | `Sources/KachaMac/Core/EditorGeometry.swift`、`Mosaic.swift` |
 | 钉图 / 设置 / 热键录制 | `Sources/KachaMac/UI/AppKit/PinWindows.swift`、`UI/SwiftUI/SettingsWindow.swift`、`HotkeyRecorderView.swift` |
 | 截图提示音（系统音效，无资源文件） | `Sources/KachaMac/Helper/ShotSound.swift` |
+| OCR 合并 / sheet（VisionKit transcript） | `Sources/KachaMac/Helper/OCR.swift`、`UI/SwiftUI/OCRResultView.swift` |
+| 原位选字（VisionKit Live Text） | `Sources/KachaMac/UI/AppKit/LiveTextOverlay.swift` |
 | PNG 导出 | `Sources/KachaMac/Helper/PNG.swift` |
 | 打包 / 脚本 | `packaging/Info.plist`、`scripts/` |

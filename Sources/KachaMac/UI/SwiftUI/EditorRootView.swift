@@ -16,11 +16,16 @@ struct EditorRootView: View {
     let onPin: () -> Void
     let onClose: () -> Void
 
+    @State private var ocrLines: [String] = []
+    @State private var ocrText = ""
+    @State private var showingOCR = false
+
     var body: some View {
         VStack(spacing: 0) {
             EditorToolbar(
                 state: state,
                 canvas: canvas,
+                onSelectText: canvas.toggleLiveText,
                 onCopy: onCopy,
                 onSave: onSave,
                 onPin: onPin,
@@ -32,6 +37,17 @@ struct EditorRootView: View {
         }
         .frame(minWidth: 840, minHeight: 460)
         .ignoresSafeArea()
+        .sheet(isPresented: $showingOCR) {
+            OCRResultView(text: $ocrText, lines: ocrLines) { showingOCR = false }
+        }
+        .onAppear {
+            canvas.onShowAllText = { text in
+                ocrLines = text.split(separator: "\n", omittingEmptySubsequences: false)
+                    .map(String.init)
+                ocrText = text
+                showingOCR = true
+            }
+        }
     }
 }
 
@@ -50,6 +66,7 @@ private struct CanvasRepresentable: NSViewRepresentable {
 private struct EditorToolbar: View {
     @ObservedObject var state: EditorState
     let canvas: EditorCanvasView
+    let onSelectText: () -> Void
     let onCopy: () -> Void
     let onSave: () -> Void
     let onPin: () -> Void
@@ -107,6 +124,13 @@ private struct EditorToolbar: View {
 
             separator
 
+            ToolbarButton(
+                symbol: ToolbarSymbol.selectText,
+                title: "原位选字",
+                active: state.liveTextActive,
+                disabled: false,
+                action: onSelectText
+            )
             ToolbarButton(
                 symbol: ToolbarSymbol.copy,
                 title: "复制",

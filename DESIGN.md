@@ -14,7 +14,7 @@
 - **框选层**：触发后先抓取所有显示器，「冻结」整个桌面；用户拖拽框选 / 调整手柄；
   `Enter` 确认、`Esc` 取消。层内带十字线、尺寸读数。
 - **编辑窗**：预览 + 标注（矩形 / 箭头 / 画笔 / 高亮 / 文字 / 马赛克）+ 撤销重做；
-  复制到剪贴板、保存 PNG、钉在桌面。
+  复制到剪贴板、保存 PNG、钉在桌面；**OCR 文字识别**（系统 Vision，离线）。
 - **取色器**：在冻帧上取样，放大镜 + hex，点击复制。
 - **零第三方依赖**：界面用 AppKit / Core Graphics 画，抓屏用系统 ScreenCaptureKit。
 
@@ -90,11 +90,13 @@ kacha/
 │   │   │   ├── EditorWindow.swift      # 编辑窗（NSWindow 宿主）
 │   │   │   ├── EditorCanvasView.swift  # 画布：鼠标 / 文字输入 / 导出
 │   │   │   ├── AnnotationRenderer.swift # 标注栅格化（预览与导出共用）
+│   │   │   ├── LiveTextOverlay.swift    # VisionKit 原位选字覆盖层
 │   │   │   ├── PinWindows.swift        # 钉图悬浮窗
 │   │   │   ├── ColorPicker.swift       # 放大镜 + 像素取样 + hex
 │   │   │   └── WindowChrome.swift      # 窗口 chrome / isReleasedWhenClosed 统一设置
 │   │   └── SwiftUI/              # NSHostingView 承载的 chrome
 │   │       ├── EditorRootView.swift     # 编辑窗：玻璃工具栏 + 画布 representable
+│   │       ├── OCRResultView.swift      # OCR 识别结果 sheet（可编辑 / 复制）
 │   │       ├── SettingsWindow.swift     # 设置窗（NSWindow 宿主）
 │   │       ├── SettingsRootView.swift   # 设置窗：系统设置风顶栏 / 卡片 / 底栏
 │   │       └── HotkeyRecorderView.swift # 热键录制按钮 + 本地 NSEvent 监听
@@ -105,6 +107,7 @@ kacha/
 │       ├── Permissions.swift     # 屏幕录制 TCC 引导
 │       ├── PNG.swift             # ImageIO PNG 编码
 │       ├── Export.swift          # 剪贴板 / 保存面板（编辑器与钉图共用）
+│       ├── OCR.swift             # VisionKit 文本分析 + 合并换行
 │       ├── ShotSound.swift       # 系统截图提示音
 │       └── SelfCheck.swift       # --selfcheck 纯逻辑断言
 ├── packaging/Info.plist          # LSUIElement=true、LSMinimumSystemVersion=14.0
@@ -224,6 +227,18 @@ marker 工具，用 `defaultMarkerStroke`（最小 16px）的粗笔刷。
 （居中锁宽高比，锚在对面角，最小 80×60）、双击 / `Esc` 关闭、右键菜单（复制 / 保存 / 关闭）；
 大图按屏幕 80% 缩放，窗口用 `orderFrontRegardless()` 展示以免抢焦点。菜单栏提供「关闭所有钉图」。
 
+### 4.10 OCR 文字识别（系统 VisionKit）
+
+离线、无第三方，只有一条路径：工具栏「原位选字」开关用
+`VisionKit.ImageAnalysisOverlayView`（`.textSelection`）+ `ImageAnalyzer`，在画布上按
+`state.imageRect` 叠一个对齐的 `NSImageView` + 覆盖层，直接在图上拖选、右键复制（和
+iPhone 相册一致）。开启时画布暂停画标注，`Esc` 或再点按钮退出。
+
+右键菜单还有「复制全部文字」和「显示全部文字…」——后者打开一个 SwiftUI sheet，可编辑 /
+复制，并带「合并换行」开关（CJK 之间不插空格）。识别在后台跑，`Package.swift` 链接
+`VisionKit`。`--smoke-ocr` 用 CoreText 渲染已知文字再经 `ImageAnalyzer` 识别并断言，覆盖
+文本路径且不需要录屏权限。
+
 ---
 
 ## 5. 数据流（时序）
@@ -259,9 +274,9 @@ marker 工具，用 `defaultMarkerStroke`（最小 16px）的粗笔刷。
 - **不写截图 / 录屏测试**（见 AGENTS 硬规则）。
 - `--selfcheck`：纯逻辑断言，无窗口、无屏幕录制权限、无 XCTest。覆盖坐标 / 裁剪 / PNG /
   标注栅格化等纯函数。
-- `--smoke-settings` / `--smoke-editor` / `--smoke-export`：真实开 / 关窗口路径，回归
-  `isReleasedWhenClosed` 崩溃与编辑窗生命周期。
-- `scripts/dev.sh` 串起 build + selfcheck + 三个 smoke。
+- `--smoke-settings` / `--smoke-editor` / `--smoke-export` / `--smoke-ocr`：真实开 / 关
+  窗口路径与 Vision 识别路径，回归 `isReleasedWhenClosed` 崩溃与编辑窗生命周期。
+- `scripts/dev.sh` 串起 build + selfcheck + 四个 smoke。
 
 ---
 
@@ -270,6 +285,6 @@ marker 工具，用 `defaultMarkerStroke`（最小 16px）的粗笔刷。
 - 形状 / 画笔的线宽有 4 档预设、颜色 8 色预设，但没有连续滑块 / 自定义取色。
 - 文字字号仍按对角线派生（没有字号选择器）；文字可点选 / 双击二次编辑。
 - 窗口拾取不做 app 级分组 / 子窗口选择。
-- 序号 / 椭圆 / 裁剪 / 延时 / OCR / 滚屏长图未做。
+- 序号 / 椭圆 / 裁剪 / 延时 / 滚屏长图未做。
 - 多显示器非均匀缩放下的跨屏拼接以最大 scale 兜底，尚未逐屏混合。
 - Liquid Glass 只在 macOS 26+ 生效，旧系统是材质回退；部署目标仍是 14.0。

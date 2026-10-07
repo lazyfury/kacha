@@ -6,6 +6,7 @@
 
 import AppKit
 import CoreGraphics
+import CoreText
 import ScreenCaptureKit
 
 @MainActor
@@ -66,6 +67,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         if options.smokeExport {
             runExportSmoke()
+        }
+        if options.smokeOCR {
+            runOCRSmoke()
         }
     }
 
@@ -323,6 +327,58 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 exit(copied ? 0 : 1)
             }
         }
+    }
+
+    /// Debug (`--smoke-ocr`): render known text, recognize it with Vision and
+    /// check the result — the OCR path with no screen-recording permission.
+    private func runOCRSmoke() {
+        guard let image = Self.textImage("KACHA OCR 7788") else {
+            FileHandle.standardError.write(Data("kacha smoke-ocr: FAILED (render)\n".utf8))
+            exit(1)
+        }
+        Task { @MainActor in
+            let transcript = await OCR.analyze(image)?.transcript ?? ""
+            let normalized = transcript.uppercased()
+            let ok = normalized.contains("KACHA") && normalized.contains("7788")
+            let found = transcript.replacingOccurrences(of: "\n", with: " | ")
+            FileHandle.standardError.write(
+                Data("kacha smoke-ocr: \(ok ? "ok" : "FAILED") [\(found)]\n".utf8)
+            )
+            exit(ok ? 0 : 1)
+        }
+    }
+
+    /// A white bitmap with `text` in black, for the OCR smoke.
+    private static func textImage(_ text: String) -> CGImage? {
+        let width = 800
+        let height = 200
+        let colorSpace = CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB()
+        guard
+            let ctx = CGContext(
+                data: nil,
+                width: width,
+                height: height,
+                bitsPerComponent: 8,
+                bytesPerRow: 0,
+                space: colorSpace,
+                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+            )
+        else {
+            return nil
+        }
+        ctx.setFillColor(CGColor(srgbRed: 1, green: 1, blue: 1, alpha: 1))
+        ctx.fill(CGRect(x: 0, y: 0, width: width, height: height))
+        let font = CTFontCreateWithName("Helvetica-Bold" as CFString, 72, nil)
+        let attributes: [NSAttributedString.Key: Any] = [
+            .font: font,
+            kCTForegroundColorAttributeName as NSAttributedString.Key:
+                CGColor(srgbRed: 0, green: 0, blue: 0, alpha: 1),
+        ]
+        let attributed = NSAttributedString(string: text, attributes: attributes)
+        let line = CTLineCreateWithAttributedString(attributed)
+        ctx.textPosition = CGPoint(x: 40, y: 70)
+        CTLineDraw(line, ctx)
+        return ctx.makeImage()
     }
 
     /// A 64×64 red composed image, for the smoke tests.

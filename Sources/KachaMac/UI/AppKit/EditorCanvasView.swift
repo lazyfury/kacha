@@ -13,7 +13,11 @@ final class EditorCanvasView: NSView, NSTextFieldDelegate {
     let session: CaptureSession
     let state: EditorState
 
+    /// Called when Live Text asks to show the full recognized transcript.
+    var onShowAllText: ((String) -> Void)?
+
     private let renderer = AnnotationRenderer()
+    private var liveText: LiveTextOverlay?
     private var dragging = false
     private var textField: NSTextField?
     private var editingPosition: CGPoint?
@@ -45,6 +49,7 @@ final class EditorCanvasView: NSView, NSTextFieldDelegate {
         guard let ctx = NSGraphicsContext.current?.cgContext else { return }
         let imageRect = containFit(image, in: bounds) ?? .zero
         state.imageRect = imageRect
+        liveText?.frame = imageRect
         drawContent(into: ctx, bounds: bounds, imageRect: imageRect)
     }
 
@@ -114,6 +119,7 @@ final class EditorCanvasView: NSView, NSTextFieldDelegate {
     // MARK: - Mouse
 
     override func mouseDown(with event: NSEvent) {
+        guard liveText == nil else { return }
         commitText()
         let position = convert(event.locationInWindow, from: nil)
         let imageRect = state.imageRect
@@ -138,7 +144,7 @@ final class EditorCanvasView: NSView, NSTextFieldDelegate {
     }
 
     override func mouseDragged(with event: NSEvent) {
-        guard dragging, var draft = state.draft else { return }
+        guard liveText == nil, dragging, var draft = state.draft else { return }
         let point = clampToImage(
             toImage(state.imageRect, image, convert(event.locationInWindow, from: nil)),
             image
@@ -158,7 +164,7 @@ final class EditorCanvasView: NSView, NSTextFieldDelegate {
     }
 
     override func mouseUp(with event: NSEvent) {
-        guard dragging else { return }
+        guard liveText == nil, dragging else { return }
         dragging = false
         if let draft = state.draft, isRenderable(draft) {
             state.annotations.append(draft)
@@ -270,6 +276,38 @@ final class EditorCanvasView: NSView, NSTextFieldDelegate {
 
     func controlTextDidEndEditing(_ notification: Notification) {
         commitText()
+    }
+
+    // MARK: - Live Text
+
+    /// Toggle in-place text selection over the drawn image.
+    func toggleLiveText() {
+        setLiveText(active: liveText == nil)
+    }
+
+    private func setLiveText(active: Bool) {
+        if active {
+            guard liveText == nil, let composed = session.composed else { return }
+            let overlay = LiveTextOverlay(image: composed.image)
+            overlay.onShowAll = { [weak self] text in self?.onShowAllText?(text) }
+            overlay.frame = state.imageRect
+            addSubview(overlay)
+            liveText = overlay
+            Task { await overlay.analyze() }
+        } else {
+            liveText?.removeFromSuperview()
+            liveText = nil
+        }
+        state.liveTextActive = liveText != nil
+        needsDisplay = true
+    }
+
+    override func keyDown(with event: NSEvent) {
+        if liveText != nil, event.keyCode == 53 {  // Escape exits text selection
+            setLiveText(active: false)
+            return
+        }
+        super.keyDown(with: event)
     }
 
     // MARK: - Export

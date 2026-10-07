@@ -23,6 +23,7 @@ enum SelfCheck {
         checkAnnotations(check)
         checkSymbols(check)
         checkHotkeys(check)
+        checkOCR(check)
         checkSound(check)
 
         print(failures == 0 ? "selfcheck: ok" : "selfcheck: \(failures) failure(s)")
@@ -280,6 +281,22 @@ enum SelfCheck {
         }
         let arrow = Hotkey(keyCode: 123, modifiers: [.command], keyLabel: "←")
         check(arrow.menuKeyEquivalent == nil, "non-alphanumeric labels have no menu equivalent")
+    }
+
+    /// `joinLines` keeps or drops the visual line breaks for the OCR sheet.
+    private static func checkOCR(_ check: (Bool, String) -> Void) {
+        check(
+            OCR.joinLines(["a", "b"], merged: false) == "a\nb",
+            "joinLines keeps newlines when not merged"
+        )
+        check(
+            OCR.joinLines(["hello", "world"], merged: true) == "hello world",
+            "joinLines joins Latin lines with a space"
+        )
+        check(
+            OCR.joinLines(["你好", "世界"], merged: true) == "你好世界",
+            "joinLines joins CJK lines without a space"
+        )
     }
 
     /// The fallback must always resolve; the exact system capture sound is not a

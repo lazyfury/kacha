@@ -38,6 +38,7 @@ let package = Package(
                 .linkedFramework("CoreFoundation"),
                 .linkedFramework("ScreenCaptureKit"),
                 .linkedFramework("Carbon"),
+                .linkedFramework("VisionKit"),
             ]
         ),
     ]

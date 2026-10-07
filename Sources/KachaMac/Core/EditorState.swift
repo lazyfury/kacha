@@ -13,6 +13,8 @@ final class EditorState: ObservableObject {
     @Published var strokeFactor: CGFloat = 1
     /// Whether the rectangle tool fills its shape.
     @Published var rectangleFilled = false
+    /// Whether in-place Live Text selection is active on the canvas.
+    @Published var liveTextActive = false
     /// Font size in image pixels, for the text tool.
     var textSize: CGFloat = 18
     @Published var annotations: [Annotation] = []
