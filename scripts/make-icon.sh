@@ -2,7 +2,7 @@
 #
 # 把 packaging/AppIcon.png 编译成 .icns（sips + iconutil，不用额外依赖）。
 #
-#     scripts/make-icon.sh                      # -> packaging/ushot.icns
+#     scripts/make-icon.sh                      # -> packaging/kacha.icns
 #     scripts/make-icon.sh /path/to/out.icns    # 指定输出
 #
 # 源图是 1024×1024、已经按 macOS 图标网格排版（圆角正方形 824pt 居中 + 投影），
@@ -12,7 +12,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SRC="$ROOT/packaging/AppIcon.png"
-OUT="${1:-$ROOT/packaging/ushot.icns}"
+OUT="${1:-$ROOT/packaging/kacha.icns}"
 
 if [ ! -f "$SRC" ]; then
 	echo "找不到源图 $SRC" >&2
@@ -25,7 +25,7 @@ fi
 
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
-ICONSET="$TMP/ushot.iconset"
+ICONSET="$TMP/kacha.iconset"
 mkdir -p "$ICONSET"
 
 # .icns 要求 {16,32,128,256,512} 各出 1x / 2x 两档。

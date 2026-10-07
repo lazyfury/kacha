@@ -1,7 +1,7 @@
 // Process-wide hotkeys via the Carbon Event Manager.
 //
 // `RegisterEventHotKey` works without Accessibility permission (unlike a global
-// `NSEvent` monitor) and fires even when ushot is not frontmost. Bindings are
+// `NSEvent` monitor) and fires even when kacha is not frontmost. Bindings are
 // re-registered when the user changes them in Settings.
 
 import AppKit
@@ -97,5 +97,6 @@ final class Hotkeys {
         }
     }
 
-    private static let signature = OSType(0x7573_6874)
+    /// The four-character code 'kach', namespacing this app's hotkey ids.
+    private static let signature = OSType(0x6B61_6368)
 }

@@ -1,7 +1,7 @@
 // AppKit lifecycle for a menu-bar app.
 //
 // There is no persistent window and no render loop: the overlay and the editor
-// redraw on demand. ushot lives in the status item and opens windows only when
+// redraw on demand. kacha lives in the status item and opens windows only when
 // it needs to.
 
 import AppKit
@@ -126,7 +126,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         appMenu.addItem(.separator())
         appMenu.addItem(
-            withTitle: "退出 ushot",
+            withTitle: "退出 kacha",
             action: #selector(NSApplication.terminate(_:)),
             keyEquivalent: "q"
         )
@@ -262,7 +262,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let alert = NSAlert()
         alert.messageText = "需要「屏幕录制」权限"
         alert.informativeText =
-            "请在「系统设置 › 隐私与安全性 › 屏幕录制」里勾选 ushot，然后重新启动应用。"
+            "请在「系统设置 › 隐私与安全性 › 屏幕录制」里勾选 kacha，然后重新启动应用。"
         alert.addButton(withTitle: "打开系统设置")
         alert.addButton(withTitle: "稍后")
         NSApp.activate(ignoringOtherApps: true)
@@ -320,7 +320,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
             let copied = NSPasteboard.general.data(forType: .png) != nil
             FileHandle.standardError.write(
-                Data("ushot smoke-export copy: \(copied ? "ok" : "FAILED")\n".utf8)
+                Data("kacha smoke-export copy: \(copied ? "ok" : "FAILED")\n".utf8)
             )
             self.editor.close()
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {

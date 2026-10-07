@@ -27,4 +27,4 @@ else
     "$ROOT/scripts/build.sh"
 fi
 
-exec "$ROOT/.build/$PROFILE/ushot-mac" ${ARGS[@]+"${ARGS[@]}"}
+exec "$ROOT/.build/$PROFILE/kacha-mac" ${ARGS[@]+"${ARGS[@]}"}

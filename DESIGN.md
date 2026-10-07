@@ -1,6 +1,6 @@
-# ushot — 设计文档（macOS 截图工具 / 纯 Swift）
+# kacha — 设计文档（macOS 截图工具 / 纯 Swift）
 
-> 状态：**已实现并收尾**。工作名 `ushot`。当前实现是纯 Swift（AppKit + Core Graphics +
+> 状态：**已实现并收尾**。工作名 `kacha`。当前实现是纯 Swift（AppKit + Core Graphics +
 > ScreenCaptureKit），没有 Rust / C ABI。旧的 Rust（igui）设计保留在 git 历史里。
 > 系统要求：**macOS 14.0 (Sonoma) 起**。
 
@@ -63,9 +63,9 @@
 ## 3. 目录布局
 
 ```
-ushot/
-├── Package.swift                 # SwiftPM：可执行目标 ushot-mac
-├── Sources/UShotMac/
+kacha/
+├── Package.swift                 # SwiftPM：可执行目标 kacha-mac
+├── Sources/KachaMac/
 │   ├── main.swift                # NSApplication + .accessory + 启动参数
 │   ├── AppDelegate.swift         # 生命周期 / 菜单 / 热键 / 截图·取色入口 / smoke
 │   ├── MenuBar.swift             # NSStatusItem + 菜单
@@ -92,7 +92,7 @@ ushot/
 ├── packaging/Info.plist          # LSUIElement=true、LSMinimumSystemVersion=14.0
 ├── packaging/AppIcon.png         # 应用图标源图（1024×1024，macOS 图标网格）
 └── scripts/{build,run,package,dev}.sh
-    scripts/make-icon.sh          # AppIcon.png → dist/ushot.app/Contents/Resources/ushot.icns
+    scripts/make-icon.sh          # AppIcon.png → dist/kacha.app/Contents/Resources/kacha.icns
 ```
 
 ---
@@ -185,7 +185,7 @@ marker 工具，用 `defaultMarkerStroke`（最小 16px）的粗笔刷。
 - **新外观由链接 SDK 版本决定。** SwiftPM 默认把部署目标（14.0）当作
   `LC_BUILD_VERSION.sdk`，系统就按 macOS 15 旧外观画控件（小开关、不透明窗口、无玻璃）。
   `Package.swift` 用 linker flag `-platform_version macos 14.0 26.0` 把 sdk 钉到 26.0，
-  才会启用 macOS 26 外观。验证：`vtool -show-build .build/debug/ushot-mac` 显示 `sdk 26.0`。
+  才会启用 macOS 26 外观。验证：`vtool -show-build .build/debug/kacha-mac` 显示 `sdk 26.0`。
 - **编辑窗**：`.fullSizeContentView`，顶部一条留给工具栏（`VStack`：工具栏 + 画布，居中），
   画布只在工具栏下方，图片不会被浮条压住。因为标题栏没得拖了，浮条最左边加了一个
   `WindowDragArea` 拖拽把手（调 `performDrag`）。当前工具用 accent 胶囊标记。窗口

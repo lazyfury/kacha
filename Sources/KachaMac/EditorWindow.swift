@@ -46,7 +46,7 @@ final class EditorWindow: NSObject, NSWindowDelegate {
             backing: .buffered,
             defer: false
         )
-        window.title = "ushot — 编辑"
+        window.title = "kacha — 编辑"
         // ARC owns this window; AppKit must not also release it on close.
         window.isReleasedWhenClosed = false
         window.delegate = self
@@ -109,7 +109,7 @@ final class EditorWindow: NSObject, NSWindowDelegate {
     private static func timestamp() -> String {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyyMMdd-HHmmss"
-        return "ushot-" + formatter.string(from: Date())
+        return "kacha-" + formatter.string(from: Date())
     }
 
     // MARK: - Teardown

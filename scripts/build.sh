@@ -29,4 +29,4 @@ if [ "${#CONFIG[@]}" -gt 0 ]; then
 else
     swift build
 fi
-echo "built: $ROOT/.build/$PROFILE/ushot-mac"
+echo "built: $ROOT/.build/$PROFILE/kacha-mac"

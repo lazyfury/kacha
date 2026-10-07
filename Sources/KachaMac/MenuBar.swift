@@ -1,4 +1,4 @@
-// The menu-bar item: ushot's entry point when it is not driven from the menu.
+// The menu-bar item: kacha's entry point when it is not driven from the menu.
 
 import AppKit
 
@@ -37,7 +37,7 @@ final class MenuBar {
         let configuration = NSImage.SymbolConfiguration(pointSize: 18, weight: .regular)
         if let image = NSImage(
             systemSymbolName: "camera.viewfinder",
-            accessibilityDescription: "ushot"
+            accessibilityDescription: "kacha"
         )?.withSymbolConfiguration(configuration) {
             statusItem.button?.image = image
             statusItem.button?.imageScaling = .scaleProportionallyDown
@@ -80,7 +80,7 @@ final class MenuBar {
         menu.addItem(settings)
 
         menu.addItem(.separator())
-        let quit = NSMenuItem(title: "退出 ushot", action: #selector(quitClicked), keyEquivalent: "q")
+        let quit = NSMenuItem(title: "退出 kacha", action: #selector(quitClicked), keyEquivalent: "q")
         quit.target = self
         menu.addItem(quit)
 

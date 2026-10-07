@@ -11,11 +11,11 @@ cd "$ROOT"
 echo "== swift build =="
 swift build
 echo "== selfcheck =="
-.build/debug/ushot-mac --selfcheck
+.build/debug/kacha-mac --selfcheck
 echo "== smoke: settings =="
-.build/debug/ushot-mac --smoke-settings
+.build/debug/kacha-mac --smoke-settings
 echo "== smoke: editor =="
-.build/debug/ushot-mac --smoke-editor
+.build/debug/kacha-mac --smoke-editor
 echo "== smoke: export =="
-.build/debug/ushot-mac --smoke-export
+.build/debug/kacha-mac --smoke-export
 echo "OK"

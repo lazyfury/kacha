@@ -240,7 +240,7 @@ final class PinView: NSView {
     @objc private func saveImage() {
         let panel = NSSavePanel()
         panel.allowedContentTypes = [.png]
-        panel.nameFieldStringValue = "ushot-pin.png"
+        panel.nameFieldStringValue = "kacha-pin.png"
         panel.canCreateDirectories = true
         if panel.runModal() == .OK, let url = panel.url {
             try? png.write(to: url)

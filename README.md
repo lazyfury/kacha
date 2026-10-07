@@ -1,4 +1,4 @@
-# ushot
+# kacha
 
 macOS 截图工具。**纯 Swift**：AppKit 管窗口、Core Graphics 画界面、ScreenCaptureKit 抓屏；
 编辑 / 设置窗口的界面用 **SwiftUI**（macOS 26 上是 Liquid Glass，旧系统回退到材质）。
@@ -31,7 +31,7 @@ macOS 截图工具。**纯 Swift**：AppKit 管窗口、Core Graphics 画界面�
 ## 架构
 
 ```text
-Sources/UShotMac/
+Sources/KachaMac/
   main.swift              NSApplication + .accessory + 启动参数
   AppDelegate.swift       生命周期、菜单、热键、截图/取色入口、smoke 自检
   MenuBar.swift           NSStatusItem + 菜单
@@ -71,12 +71,12 @@ scripts/build.sh                 # swift build
 scripts/run.sh                   # 构建并运行（菜单栏，无窗口）
 scripts/run.sh --smoke-editor    # 开/关编辑窗，走 AppKit 真实关闭路径
 scripts/run.sh --smoke-export    # 注入合成图 → 编辑 → 复制到剪贴板
-scripts/package.sh [--open]      # 组装并 ad-hoc 签名 dist/ushot.app（含图标）
+scripts/package.sh [--open]      # 组装并 ad-hoc 签名 dist/kacha.app（含图标）
 
 ./scripts/dev.sh                 # build + selfcheck + settings/editor/export smoke
 ```
 
-也可以直接用 **Xcode** 打开仓库根目录（`Package.swift` 即项目），选 `ushot-mac` scheme 运行。
+也可以直接用 **Xcode** 打开仓库根目录（`Package.swift` 即项目），选 `kacha-mac` scheme 运行。
 
 首次截图需在「系统设置 › 隐私与安全性 › 屏幕录制」里授予权限并重启。
 

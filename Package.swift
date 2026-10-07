@@ -1,23 +1,23 @@
 // swift-tools-version:5.9
 //
-// Pure-Swift ushot: AppKit windows + Core Graphics rendering + ScreenCaptureKit.
+// Pure-Swift kacha: AppKit windows + Core Graphics rendering + ScreenCaptureKit.
 // The whole app (windows, events, capture, UI, image work) is Swift; there is no
 // Rust static library and no C ABI.
 
 import PackageDescription
 
 let package = Package(
-    name: "UShotMac",
+    name: "KachaMac",
     platforms: [
         .macOS(.v14)
     ],
     products: [
-        .executable(name: "ushot-mac", targets: ["UShotMac"])
+        .executable(name: "kacha-mac", targets: ["KachaMac"])
     ],
     targets: [
         .executableTarget(
-            name: "UShotMac",
-            path: "Sources/UShotMac",
+            name: "KachaMac",
+            path: "Sources/KachaMac",
             linkerSettings: [
                 // SwiftPM records the deployment target as the linked SDK version
                 // in `LC_BUILD_VERSION`, which makes macOS treat the app as legacy

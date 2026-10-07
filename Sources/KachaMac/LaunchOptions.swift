@@ -1,6 +1,6 @@
 // Launch arguments.
 //
-// Usage: `ushot-mac [--smoke-editor | --smoke-export]`
+// Usage: `kacha-mac [--smoke-editor | --smoke-export]`
 //
 // There is deliberately no `--role` / `--session`: the capture flow creates its
 // windows from a live session, so a bare window from the command line would have
@@ -41,7 +41,7 @@ struct LaunchOptions {
                 smokeExport = true
                 index += 1
             case "-h", "--help":
-                let usage = "用法：ushot-mac [--selfcheck] [--smoke-settings] [--smoke-editor] [--smoke-export]\n"
+                let usage = "用法：kacha-mac [--selfcheck] [--smoke-settings] [--smoke-editor] [--smoke-export]\n"
                 FileHandle.standardError.write(Data(usage.utf8))
                 exit(0)
             default:

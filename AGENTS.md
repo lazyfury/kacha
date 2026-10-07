@@ -1,4 +1,4 @@
-# AGENTS.md — ushot
+# AGENTS.md — kacha
 
 macOS 截图工具。**纯 Swift 应用**：AppKit 管窗口 / 原生事件与系统能力，Core Graphics 画界面
 并做全部图像处理，ScreenCaptureKit 抓屏；编辑 / 设置窗口的 chrome 用 SwiftUI。
@@ -7,7 +7,7 @@ macOS 截图工具。**纯 Swift 应用**：AppKit 管窗口 / 原生事件与�
 ## 硬规则
 
 1. **只写 Swift。** 不引入 Rust / C ABI / 第二个语言运行时。`Package.swift` 在仓库根目录，
-   唯一可执行目标是 `Sources/UShotMac`。不往仓库里丢构建产物（见 `.gitignore`）。
+   唯一可执行目标是 `Sources/KachaMac`。不往仓库里丢构建产物（见 `.gitignore`）。
 2. **AppKit 拥有窗口与系统能力。** 窗口 / `NSView` / 事件、状态栏、全局热键、
    ScreenCaptureKit、剪贴板、保存面板、权限都留在 Swift 壳里。
 3. **渲染用 Core Graphics，chrome 用 SwiftUI。** 覆盖层与编辑画布用 `NSView.draw(_:)` +
@@ -67,7 +67,7 @@ macOS 截图工具。**纯 Swift 应用**：AppKit 管窗口 / 原生事件与�
   Liquid Glass。`Package.swift` 里用 linker flag 钉死平台版本才会启用新外观：
   `.unsafeFlags(["-Xlinker", "-platform_version", "-Xlinker", "macos", "-Xlinker", "14.0",
   "-Xlinker", "26.0"])`（minos 保持 14.0，sdk 报 26.0）。验证：`vtool -show-build
-  .build/debug/ushot-mac` 要显示 `sdk 26.0`，对比系统设置是 `26.7`。
+  .build/debug/kacha-mac` 要显示 `sdk 26.0`，对比系统设置是 `26.7`。
 - **设置窗对齐 macOS 26 系统设置的观感。** 窗口 `.fullSizeContentView` + 透明无标题
   titlebar，SwiftUI 自己画顶栏标题（`ignoresSafeArea(edges: .top)` + 左边距避开红绿灯）和
   底部动作栏。分节标题 / 说明是卡片内第一行（不是卡外的 `Section` header，也不带 SF
@@ -95,11 +95,11 @@ macOS 截图工具。**纯 Swift 应用**：AppKit 管窗口 / 原生事件与�
 
 ```bash
 swift build                          # 仓库根 Package.swift
-.build/debug/ushot-mac --selfcheck
+.build/debug/kacha-mac --selfcheck
 scripts/run.sh --smoke-settings
 scripts/run.sh --smoke-editor
 scripts/run.sh --smoke-export
-scripts/package.sh                   # 组装 dist/ushot.app
+scripts/package.sh                   # 组装 dist/kacha.app
 ```
 
 ## 目录地图
@@ -107,11 +107,11 @@ scripts/package.sh                   # 组装 dist/ushot.app
 | 需要… | 看这里 |
 |---|---|
 | 总体设计 / 阶段 / 风险 | `DESIGN.md` |
-| 生命周期 / 菜单 / 热键 / 入口 | `Sources/UShotMac/AppDelegate.swift`、`MenuBar.swift`、`Hotkeys.swift` |
-| 抓屏 / 冻帧 / 单窗口捕获 | `Sources/UShotMac/Capture.swift` |
-| 会话（冻帧 / 选区 / 合成） | `Sources/UShotMac/Session.swift`、`Selection.swift`、`Compose.swift` |
-| 框选层 / 取色层 | `Sources/UShotMac/OverlayWindow.swift`、`ColorPicker.swift` |
-| 编辑窗 / 画布 / 标注 | `Sources/UShotMac/EditorWindow.swift`、`EditorCanvasView.swift`、`Annotate.swift` |
+| 生命周期 / 菜单 / 热键 / 入口 | `Sources/KachaMac/AppDelegate.swift`、`MenuBar.swift`、`Hotkeys.swift` |
+| 抓屏 / 冻帧 / 单窗口捕获 | `Sources/KachaMac/Capture.swift` |
+| 会话（冻帧 / 选区 / 合成） | `Sources/KachaMac/Session.swift`、`Selection.swift`、`Compose.swift` |
+| 框选层 / 取色层 | `Sources/KachaMac/OverlayWindow.swift`、`ColorPicker.swift` |
+| 编辑窗 / 画布 / 标注 | `Sources/KachaMac/EditorWindow.swift`、`EditorCanvasView.swift`、`Annotate.swift` |
 | 钉图 / 设置 / 热键录制 | `PinWindows.swift`、`SettingsWindow.swift`、`HotkeyRecorderView.swift` |
 | 截图提示音（系统音效，无资源文件） | `ShotSound.swift`、`Preferences.swift` |
 | PNG 导出 / 权限 | `PNG.swift`、`Permissions.swift` |

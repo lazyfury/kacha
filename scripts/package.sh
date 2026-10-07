@@ -6,17 +6,17 @@
 #     scripts/package.sh --open   # ... and launch it afterwards
 #
 # The whole app is Swift, so the bundle is self-contained:
-#   Contents/MacOS/ushot-mac      the app
+#   Contents/MacOS/kacha-mac      the app
 #   Contents/Info.plist           LSUIElement (menu-bar app)
-#   Contents/Resources/ushot.icns 应用图标（由 packaging/AppIcon.png 生成）
+#   Contents/Resources/kacha.icns 应用图标（由 packaging/AppIcon.png 生成）
 #
 # `codesign` is ad-hoc (`-`), enough for a locally built app to launch. Screen
 # recording permission is still per-user TCC and granted on first use.
 
 set -euo pipefail
 
-APP_NAME="ushot"
-BINARY="ushot-mac"
+APP_NAME="kacha"
+BINARY="kacha-mac"
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DIST="$ROOT/dist"
@@ -61,7 +61,7 @@ cp "$PLIST" "$APP/Contents/Info.plist"
 
 # 应用图标：由 packaging/AppIcon.png 现场生成，产物不进仓库。
 echo "==> 生成图标"
-"$ROOT/scripts/make-icon.sh" "$APP/Contents/Resources/ushot.icns"
+"$ROOT/scripts/make-icon.sh" "$APP/Contents/Resources/kacha.icns"
 
 # The executable name and the plist must agree, or the app launches nothing.
 declared="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$APP/Contents/Info.plist")"

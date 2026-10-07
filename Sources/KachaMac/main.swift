@@ -1,7 +1,7 @@
-// ushot — the pure-Swift macOS host.
+// kacha — the pure-Swift macOS host.
 //
 // AppKit owns the windows, Core Graphics renders the UI, and ScreenCaptureKit
-// captures the screen. ushot is a menu-bar app (`.accessory`, no Dock icon): it
+// captures the screen. kacha is a menu-bar app (`.accessory`, no Dock icon): it
 // lives in the status item and opens windows only on demand.
 
 import AppKit
