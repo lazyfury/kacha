@@ -4,7 +4,8 @@
 > 已按推荐决策：方案 A（`SCRecordingOutput`，macOS 15+ 门控）、无暂停、
 > 支持区域 / 窗口 / 整屏、窗口列表（支持被遮挡窗口）、自动运镜放 Phase 4。
 > Phase 2a/2b 已做：帧率 / 编码 / 容器 / 音频来源（含系统声 + 麦克风混音）设置、开始前倒数、
-> 光标 / 点击高亮、麦克风（独立采集 + 结束合流，录制中可实时开关）。Phase 3/4 未做。
+> 光标 / 点击高亮、麦克风（独立采集 + 结束合流，录制中可实时开关）。
+> Phase 3 部分已做：**暂停 / 继续**（分段录制 + 归一化 + 拼接）。GIF / 裁剪未做，Phase 4 未做。
 >
 > 所有 API 可用性均用本机 `MacOSX27.0.sdk` 头文件核实（系统 macOS 26.7.1）。
 
@@ -296,7 +297,8 @@ Sources/KachaMac/UI/
 - **Phase 1（MVP）**：区域 / 窗口 / 整屏 **视频**录制（H.264 mp4）、控制栏
   （停止 / 取消 / 计时）、菜单 + 热键、复用保存目录、`--selfcheck` + `--smoke-record`。
 - **Phase 2**：系统声 + 麦克风、帧率 / 编码 / 容器设置、开始前倒数、光标 / 点击高亮。
-- **Phase 3**：暂停（分段拼接或转 writer）、GIF、未来 OS 的 `SCRecordingEditor` 裁剪。
+- **Phase 3**：GIF、未来 OS 的 `SCRecordingEditor` 裁剪。（**暂停已做**：分段录制，停止时
+  用 `VideoConcatenator` 拼接；未采用 writer 方案。）
 - **Phase 4（自动运镜）**：录制时记光标 / 点击 / Ctrl 手势轨迹，后处理用
   `AVMutableVideoComposition`（或自定义 `AVVideoCompositing`）做焦点缩放 + 平滑光标；
   单独设计、单独分期。

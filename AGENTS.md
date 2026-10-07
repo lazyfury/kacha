@@ -52,6 +52,10 @@ macOS 截图工具。**纯 Swift 应用**：AppKit 管窗口 / 原生事件与�
   开关**（录制中改 stream 配置会中断录制）：用 `MicRecorder`（AVCaptureSession + AVAssetWriter）
   独立采集、mute 标志跳过采样，停止后用 `RecordingMuxer` 按主机时钟偏移合流。麦克风需打包
   `.app` 且 `Info.plist` 有 `NSMicrophoneUsageDescription`，否则请求权限会崩。详见 `RECORDING.md`。
+- **多段录屏拼接要插到同一条 video / audio 轨**，别在循环里 `addMutableTrack` 每段新建一条：
+  `AVMutableComposition` 多个视频轨只会显示第一条，后面的画面会**冻结在第一条最后一帧**（看起来
+  像“继续后没录上”）。`VideoConcatenator` 只建一条视频轨 + 一条音轨，每段插到同一条轨的 cursor 上。
+  同理 `RecordingMuxer` / `AudioMixer` 把麦克风裁到视频长度，避免音轨超出视频留下冻结帧。
 - **程序化 `NSWindow` / `NSPanel` 必须 `isReleasedWhenClosed = false`。** 默认是 `true`，
   而窗口由 ARC 持有；点红钮 / `performClose` 关闭时 AppKit 释放一次、ARC 再释放一次，
   在 `objc_release` 崩溃（EXC_BAD_ACCESS）。回归：`scripts/run.sh --smoke-editor`
@@ -136,7 +140,7 @@ SwiftPM 递归编译子目录，**加文件夹不用改 `Package.swift`**。
 | 编辑窗 / 画布 / 标注 | `Sources/KachaMac/UI/AppKit/EditorWindow.swift`、`EditorCanvasView.swift`、`AnnotationRenderer.swift`、`Core/Annotate.swift`、`EditorState.swift` |
 | 画布几何 / 马赛克 | `Sources/KachaMac/Core/EditorGeometry.swift`、`Mosaic.swift` |
 | 录屏目标 / 几何 / 计时（纯逻辑） | `Sources/KachaMac/Core/Recording.swift` |
-| 录屏后端（SCRecordingOutput，15+） | `Sources/KachaMac/Helper/ScreenRecorder.swift`、`MicRecorder.swift`、`RecordingMuxer.swift`、`AudioMixer.swift` |
+| 录屏后端（SCRecordingOutput，15+） | `Sources/KachaMac/Helper/ScreenRecorder.swift`、`RecordingSession.swift`、`MicRecorder.swift`、`RecordingMuxer.swift`、`AudioMixer.swift`、`VideoConcatenator.swift` |
 | 录屏控制栏 | `Sources/KachaMac/UI/AppKit/RecordingBar.swift`、`UI/SwiftUI/RecordingBarView.swift` |
 | 钉图 / 设置 / 热键录制 | `Sources/KachaMac/UI/AppKit/PinWindows.swift`、`UI/SwiftUI/SettingsWindow.swift`、`HotkeyRecorderView.swift` |
 | 截图提示音（系统音效，无资源文件） | `Sources/KachaMac/Helper/ShotSound.swift` |

@@ -45,10 +45,15 @@ enum RecordingMuxer {
             of: videoTrack,
             at: .zero
         )
+        // Trim the microphone to the video length so a longer mic file cannot
+        // leave a frozen video gap.
+        let start = CMTimeMaximum(offset, .zero)
+        let available = CMTimeSubtract(videoDuration, start)
+        let micRange = CMTimeMinimum(micDuration, CMTimeMaximum(available, .zero))
         try? compositionAudio.insertTimeRange(
-            CMTimeRange(start: .zero, duration: micDuration),
+            CMTimeRange(start: .zero, duration: micRange),
             of: micTrack,
-            at: CMTimeMaximum(offset, .zero)
+            at: start
         )
 
         guard

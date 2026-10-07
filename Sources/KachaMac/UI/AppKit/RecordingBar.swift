@@ -9,6 +9,7 @@ import SwiftUI
 final class RecordingBarModel: ObservableObject {
     @Published var elapsed: TimeInterval = 0
     @Published var micMuted = false
+    @Published var paused = false
 }
 
 @MainActor
@@ -20,6 +21,7 @@ final class RecordingBar {
     var onStop: (() -> Void)?
     var onCancel: (() -> Void)?
     var onToggleMic: (() -> Void)?
+    var onTogglePause: (() -> Void)?
 
     var isOpen: Bool { panel != nil }
 
@@ -31,6 +33,7 @@ final class RecordingBar {
             model: model,
             micAvailable: micAvailable,
             onToggleMic: { [weak self] in self?.onToggleMic?() },
+            onTogglePause: { [weak self] in self?.onTogglePause?() },
             onStop: { [weak self] in self?.onStop?() },
             onCancel: { [weak self] in self?.onCancel?() }
         )
@@ -78,6 +81,11 @@ final class RecordingBar {
     /// Reflect the microphone's mute state on the button.
     func setMicMuted(_ muted: Bool) {
         model.micMuted = muted
+    }
+
+    /// Reflect the paused state on the button.
+    func setPaused(_ paused: Bool) {
+        model.paused = paused
     }
 
     /// Top-centre of the display under the cursor, just below the menu bar.

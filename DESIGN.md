@@ -121,9 +121,11 @@ kacha/
 │       ├── OCR.swift             # VisionKit 文本分析 + 合并换行
 │       ├── Barcode.swift         # Vision 二维码 / 条码解码
 │       ├── ScreenRecorder.swift  # SCStream + SCRecordingOutput 录屏后端（15+）
+│       ├── RecordingSession.swift # 录制会话：分段 / 暂停 / 归一化 / 拼接
 │       ├── MicRecorder.swift     # 独立麦克风采集（AVCaptureSession → m4a）
 │       ├── RecordingMuxer.swift  # 视频 + 音频合流（AVMutableComposition）
 │       ├── AudioMixer.swift      # 系统声 + 麦克风混成一条音轨
+│       ├── VideoConcatenator.swift # 多段视频拼接（passthrough）
 │       ├── ShotSound.swift       # 系统截图提示音
 │       └── SelfCheck.swift       # --selfcheck 纯逻辑断言
 ├── packaging/Info.plist          # LSUIElement=true、LSMinimumSystemVersion=14.0
@@ -316,6 +318,10 @@ Core Image 的 `CIQRCodeGenerator` 生成一个 QR 再解码断言（`--smoke-ba
 - **单会话**：确认录制目标后 `recordingActive` 置位，直到录制结束；期间菜单栏录屏项禁用
   （标题改「正在录制…」），再按热键 / 菜单直接返回。状态栏图标**不变**——系统已自带录制指示，
   再换图标只会多一个重复的“stop”。
+- **暂停**：`SCRecordingOutput` 没有暂停，改配置还会中断录制，所以 `RecordingSession` 用
+  **分段**实现——暂停 = 结束当前段（`ScreenRecorder` + `MicRecorder`），继续 = 开新段；
+  停止时每段先归一化成「视频 + 一条音轨」（混音 / 合流），再用 `VideoConcatenator`
+  （`AVMutableComposition` + `AVAssetExportSession` 直通）拼接。控制栏的暂停按钮变橙色。
 - **测试**：`--selfcheck` 覆盖几何 / 时长 / 文件名 / 配置枚举；`--smoke-record` 开 / 关控制栏
   （不真录屏、不需要权限）。
 

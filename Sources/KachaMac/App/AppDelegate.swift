@@ -8,7 +8,6 @@ import AppKit
 import CoreGraphics
 import CoreImage
 import CoreImage.CIFilterBuiltins
-import CoreMedia
 import CoreText
 import ScreenCaptureKit
 
@@ -23,15 +22,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private lazy var editor = EditorWindow(pins: pins)
     private var menuBar: MenuBar?
     private var hotkeys: Hotkeys?
-    /// The active recorder (macOS 15+); held as `AnyObject` so the property
-    /// itself does not require macOS 15.
-    private var recorder: AnyObject?
-    private var micRecorder: MicRecorder?
+    /// The active recording session (macOS 15+); held as `AnyObject` so the
+    /// property itself does not require macOS 15.
+    private var recordingSession: AnyObject?
     private var micMuted = false
     /// The microphone state chosen during the pre-recording countdown.
     private var countdownMicMuted = false
-    /// Host-clock time the video started, to align a separate microphone track.
-    private var recordingStartedAt: CMTime = .invalid
     /// True from the moment a recording target is confirmed until it ends, so a
     /// second recording session cannot start on top of it.
     private var recordingActive = false
@@ -317,147 +313,64 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         micMuted: Bool
     ) {
         guard #available(macOS 15.0, *) else { return }
-        let recorder = ScreenRecorder()
-        self.recorder = recorder
-        let videoURL = Export.recordingDestination(container: config.container)
-        let micURL = FileManager.default.temporaryDirectory
-            .appendingPathComponent("kacha-mic-\(UUID().uuidString).m4a")
-        let mic = config.audio.capturesMicrophone ? MicRecorder() : nil
-        self.micRecorder = mic
+        let session = RecordingSession(target: target, config: config, micMuted: micMuted)
+        self.recordingSession = session
         self.micMuted = micMuted
+        session.onFinish = { [weak self] result in
+            self?.finishRecording(result)
+        }
 
         Task { @MainActor in
             do {
-                try await recorder.start(target: target, options: config, to: videoURL)
+                try await session.start()
             } catch {
-                self.recorder = nil
-                self.micRecorder = nil
+                self.recordingSession = nil
                 self.recordingActive = false
                 self.presentCaptureError(error)
                 return
             }
-            self.recordingStartedAt = recorder.startedAt
             self.menuBar?.setRecording(true)
             self.recordMenuItem?.title = "正在录制…"
             self.recordMenuItem?.isEnabled = false
 
-            var micStarted = false
-            if let mic {
-                micStarted = await mic.start(to: micURL)
-                mic.setMuted(micMuted)
-            }
-
-            recorder.onFinish = { result in
-                self.finishRecording(
-                    result,
-                    video: videoURL,
-                    mic: micStarted ? micURL : nil,
-                    audio: config.audio,
-                    container: config.container
-                )
-            }
-            self.recordingBar.onStop = { recorder.stop() }
-            self.recordingBar.onCancel = { recorder.cancel() }
+            self.recordingBar.onStop = { session.stop() }
+            self.recordingBar.onCancel = { session.cancel() }
             self.recordingBar.onToggleMic = {
-                guard let mic, micStarted else { return }
                 self.micMuted.toggle()
-                mic.setMuted(self.micMuted)
+                session.setMicMuted(self.micMuted)
                 self.recordingBar.setMicMuted(self.micMuted)
             }
+            self.recordingBar.onTogglePause = {
+                Task { @MainActor in
+                    await session.togglePause()
+                    self.recordingBar.setPaused(session.isPaused)
+                }
+            }
             self.recordingBar.setMicMuted(micMuted)
-            self.recordingBar.show(micAvailable: micStarted, elapsed: { recorder.elapsed })
+            self.recordingBar.setPaused(false)
+            self.recordingBar.show(micAvailable: session.micActive, elapsed: { session.elapsed })
         }
     }
 
-    /// Report a finished recording: stop the microphone, mux it in when present,
-    /// then place the file (save directory or panel).
-    private func finishRecording(
-        _ result: Result<URL, Error>,
-        video: URL,
-        mic: URL?,
-        audio: RecordingAudio,
-        container: RecordingContainer
-    ) {
+    /// Report a finished recording and place the file.
+    private func finishRecording(_ result: Result<URL, Error>) {
         recordingBar.onStop = nil
         recordingBar.onCancel = nil
         recordingBar.onToggleMic = nil
+        recordingBar.onTogglePause = nil
         recordingBar.close()
-        self.recorder = nil
+        self.recordingSession = nil
         self.recordingActive = false
         menuBar?.setRecording(false)
         recordMenuItem?.title = "录制屏幕"
         recordMenuItem?.isEnabled = true
 
         switch result {
+        case .success(let url):
+            placeRecording(url)
         case .failure(let error):
-            if let micRecorder {
-                micRecorder.stop { url, _ in
-                    if let url { try? FileManager.default.removeItem(at: url) }
-                }
-                self.micRecorder = nil
-            }
             if case RecordingError.cancelled = error { return }
             presentCaptureError(error)
-        case .success(let videoURL):
-            finalizeRecording(video: videoURL, mic: mic, audio: audio, container: container)
-        }
-    }
-
-    private func finalizeRecording(
-        video: URL,
-        mic: URL?,
-        audio: RecordingAudio,
-        container: RecordingContainer
-    ) {
-        let micRecorder = self.micRecorder
-        self.micRecorder = nil
-        guard mic != nil, let micRecorder else {
-            placeRecording(video)
-            return
-        }
-        micRecorder.stop { micURL, micFirst in
-            Task { @MainActor in
-                guard let micURL else {
-                    self.placeRecording(video)
-                    return
-                }
-                let offset = CMTimeSubtract(micFirst, self.recordingStartedAt)
-                // With system audio as well, mix the two into one track first.
-                var audioURL = micURL
-                var audioOffset = offset
-                if audio == .systemAndMicrophone {
-                    let mixed = FileManager.default.temporaryDirectory
-                        .appendingPathComponent("kacha-mix-\(UUID().uuidString).m4a")
-                    if let mixedURL = await AudioMixer.mix(
-                        systemAudio: video,
-                        microphone: micURL,
-                        offset: offset,
-                        output: mixed
-                    ) {
-                        audioURL = mixedURL
-                        audioOffset = .zero
-                    }
-                }
-                let output = FileManager.default.temporaryDirectory
-                    .appendingPathComponent(
-                        "kacha-mux-\(UUID().uuidString).\(container.fileExtension)"
-                    )
-                let muxed = await RecordingMuxer.mux(
-                    video: video,
-                    microphone: audioURL,
-                    offset: audioOffset,
-                    output: output,
-                    container: container
-                )
-                if audioURL != micURL { try? FileManager.default.removeItem(at: audioURL) }
-                try? FileManager.default.removeItem(at: micURL)
-                if let muxed {
-                    try? FileManager.default.removeItem(at: video)
-                    self.placeRecording(muxed)
-                } else {
-                    self.placeRecording(video)
-                }
-            }
         }
     }
 

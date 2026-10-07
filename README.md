@@ -24,7 +24,8 @@ macOS 截图工具。**纯 Swift**：AppKit 管窗口、Core Graphics 画界面�
 - **录制屏幕**（默认 `⌘⇧R`，macOS 15+）：区域 / 窗口 / 整屏录成 mp4 / mov。复用冻结 +
   覆盖层选区；确认后弹悬浮控制栏（计时 / 停止 / 取消，麦克风实时开关）。窗口录制**不依赖顶层**，
   被遮挡的窗口也能录。设置里可选帧率 / 编码 / 容器 / 音频来源 / 倒数 / 光标 / 点击高亮；
-  有保存目录就直写，否则停止后弹保存面板。麦克风是独立采集（需打包 `.app`）；音频来源可选
+  有保存目录就直写，否则停止后弹保存面板。控制栏可暂停 / 继续（分段录制，停止时拼接）、
+  实时开关麦克风。麦克风是独立采集（需打包 `.app`）；音频来源可选
   「系统 + 麦克风」，停止后用 `AVAssetReaderAudioMixOutput` 混成一条音轨再合流（麦克风可用时
   默认就是这一档）。开始录制前的
   倒数面板里就能开关麦克风，设置「录制」页还有麦克风权限状态与请求入口。录制中菜单项
@@ -91,9 +92,11 @@ Sources/KachaMac/
     OCR.swift             VisionKit 文本分析 / 合并换行
     Barcode.swift         Vision 二维码 / 条码解码
     ScreenRecorder.swift  SCStream + SCRecordingOutput 录屏后端（macOS 15+）
+    RecordingSession.swift 录制会话：分段 / 暂停 / 归一化 / 拼接
     MicRecorder.swift     独立麦克风采集（AVCaptureSession → m4a，实时静音）
     RecordingMuxer.swift  视频 + 音频合流（AVMutableComposition）
     AudioMixer.swift      系统声 + 麦克风混成一条音轨
+    VideoConcatenator.swift 多段视频拼接（passthrough）
     ShotSound.swift       系统截图提示音
     SelfCheck.swift       `--selfcheck` 纯逻辑断言
 

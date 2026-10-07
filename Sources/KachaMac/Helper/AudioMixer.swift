@@ -48,10 +48,15 @@ enum AudioMixer {
             of: systemTrack,
             at: .zero
         )
+        // Trim the microphone to the system-audio length so a longer mic file
+        // cannot extend the mixed track past the video.
+        let start = CMTimeMaximum(offset, .zero)
+        let available = CMTimeSubtract(systemDuration, start)
+        let micRange = CMTimeMinimum(micDuration, CMTimeMaximum(available, .zero))
         try? compositionMic.insertTimeRange(
-            CMTimeRange(start: .zero, duration: micDuration),
+            CMTimeRange(start: .zero, duration: micRange),
             of: micTrack,
-            at: CMTimeMaximum(offset, .zero)
+            at: start
         )
 
         guard let reader = try? AVAssetReader(asset: composition) else { return nil }

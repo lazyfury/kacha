@@ -7,13 +7,14 @@ struct RecordingBarView: View {
     @ObservedObject var model: RecordingBarModel
     let micAvailable: Bool
     let onToggleMic: () -> Void
+    let onTogglePause: () -> Void
     let onStop: () -> Void
     let onCancel: () -> Void
 
     var body: some View {
         HStack(spacing: 12) {
             Circle()
-                .fill(Color.red)
+                .fill(model.paused ? Color.orange : Color.red)
                 .frame(width: 9, height: 9)
             Text(formatDuration(model.elapsed))
                 .font(.system(size: 13, weight: .medium))
@@ -29,6 +30,11 @@ struct RecordingBarView: View {
                     action: onToggleMic
                 )
             }
+            barButton(
+                model.paused ? "play.fill" : "pause.fill",
+                help: model.paused ? "继续录制" : "暂停录制",
+                action: onTogglePause
+            )
             barButton("stop.fill", help: "停止并保存", action: onStop)
             barButton("xmark", help: "取消并丢弃", action: onCancel)
         }
