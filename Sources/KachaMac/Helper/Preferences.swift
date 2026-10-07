@@ -92,6 +92,16 @@ enum Preferences {
         set { defaults.set(newValue, forKey: "playSound") }
     }
 
+    /// Seconds to wait before a delayed capture (0 = capture immediately). The
+    /// only offered values are `delayChoices`.
+    static var delaySeconds: Int {
+        get { defaults.object(forKey: "delaySeconds") as? Int ?? 0 }
+        set { defaults.set(newValue, forKey: "delaySeconds") }
+    }
+
+    /// The delayed-capture presets, in seconds (0 first, ascending).
+    static let delayChoices = [0, 3, 5, 10]
+
     /// The folder a capture is saved into without a panel, or nil to always ask.
     /// Stored as a bookmark (not a raw path) so it survives the folder being
     /// renamed or moved.

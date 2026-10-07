@@ -16,6 +16,7 @@ struct SettingsRootView: View {
     @State private var fullScreenHotkey = Preferences.fullScreenHotkey
     @State private var launchAtLogin = LaunchAtLogin.isEnabled
     @State private var playSound = Preferences.playSound
+    @State private var delaySeconds = Preferences.delaySeconds
     @State private var saveDirectory = Preferences.saveDirectory
 
     private var loginAvailable: Bool { LaunchAtLogin.isAvailable }
@@ -65,7 +66,12 @@ struct SettingsRootView: View {
                 }
 
                 Section {
-                    sectionHeader("截图", "截图完成后播放系统提示音。")
+                    sectionHeader("截图", "延时截图会在抓屏前倒计时；截图完成后播放系统提示音。")
+                    Picker("延时", selection: delayBinding) {
+                        ForEach(Preferences.delayChoices, id: \.self) { seconds in
+                            Text(seconds == 0 ? "不延时" : "\(seconds) 秒").tag(seconds)
+                        }
+                    }
                     Toggle(isOn: soundBinding) {
                         VStack(alignment: .leading, spacing: 3) {
                             Text("播放声音")
@@ -189,6 +195,17 @@ struct SettingsRootView: View {
                 playSound = newValue
                 Preferences.playSound = newValue
                 if newValue { ShotSound.play() }
+            }
+        )
+    }
+
+    /// Persist the delayed-capture preset on change.
+    private var delayBinding: Binding<Int> {
+        Binding(
+            get: { delaySeconds },
+            set: { newValue in
+                delaySeconds = newValue
+                Preferences.delaySeconds = newValue
             }
         )
     }

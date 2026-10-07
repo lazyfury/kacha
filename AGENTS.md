@@ -120,6 +120,7 @@ SwiftPM 递归编译子目录，**加文件夹不用改 `Package.swift`**。
 | 框选层 / 取色层 | `Sources/KachaMac/UI/AppKit/OverlayWindow.swift`、`ColorPicker.swift` |
 | 剪贴板 / 保存面板 | `Sources/KachaMac/Helper/Export.swift`、`PNG.swift` |
 | 窗口 chrome / isReleasedWhenClosed | `Sources/KachaMac/UI/AppKit/WindowChrome.swift` |
+| 延时截图倒计时 | `Sources/KachaMac/UI/AppKit/CountdownHUD.swift` |
 | 编辑窗 / 画布 / 标注 | `Sources/KachaMac/UI/AppKit/EditorWindow.swift`、`EditorCanvasView.swift`、`AnnotationRenderer.swift`、`Core/Annotate.swift`、`EditorState.swift` |
 | 画布几何 / 马赛克 | `Sources/KachaMac/Core/EditorGeometry.swift`、`Mosaic.swift` |
 | 钉图 / 设置 / 热键录制 | `Sources/KachaMac/UI/AppKit/PinWindows.swift`、`UI/SwiftUI/SettingsWindow.swift`、`HotkeyRecorderView.swift` |

@@ -99,7 +99,7 @@ private struct EditorToolbar: View {
                 .disabled(!hasImage)
             ToolbarButton(
                 symbol: state.rectangleFilled ? ToolbarSymbol.fillOn : ToolbarSymbol.fillOff,
-                title: "矩形填充",
+                title: "填充（矩形 / 椭圆）",
                 active: state.rectangleFilled,
                 disabled: !hasImage
             ) {

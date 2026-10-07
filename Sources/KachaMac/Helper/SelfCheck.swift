@@ -252,6 +252,39 @@ enum SelfCheck {
         }
         check(filled != outline, "filled rectangle differs from the outline")
 
+        // The shape tools must render too.
+        state.annotations = [
+            Annotation(tool: .ellipse, points: corners, color: [0, 1, 0, 1], stroke: 2, text: ""),
+        ]
+        check(canvas.renderExport() != plain, "ellipse changes the exported image")
+        state.annotations = [
+            Annotation(tool: .line, points: corners, color: [0, 1, 0, 1], stroke: 2, text: ""),
+        ]
+        check(canvas.renderExport() != plain, "line changes the exported image")
+        state.annotations = [
+            Annotation(
+                tool: .number,
+                points: [CGPoint(x: 20, y: 10)],
+                color: [1, 0, 0, 1],
+                stroke: 18,
+                text: "1"
+            ),
+        ]
+        check(canvas.renderExport() != plain, "number changes the exported image")
+
+        // Numbering follows the highest existing badge.
+        check(Annotation.nextNumber(in: []) == 1, "next number starts at 1")
+        let badges = [
+            Annotation(tool: .number, points: [.zero], color: [1, 0, 0, 1], stroke: 18, text: "1"),
+            Annotation(tool: .number, points: [.zero], color: [1, 0, 0, 1], stroke: 18, text: "3"),
+        ]
+        check(Annotation.nextNumber(in: badges) == 4, "next number follows the max")
+        check(
+            Tool.allCases.contains(.ellipse) && Tool.allCases.contains(.line)
+                && Tool.allCases.contains(.number),
+            "shape and number tools exist"
+        )
+
         check(!AnnotationPalette.colors.isEmpty, "palette has colours")
         check(
             AnnotationPalette.strokePresets.contains { $0.factor == 1 },
@@ -282,6 +315,13 @@ enum SelfCheck {
         }
         let arrow = Hotkey(keyCode: 123, modifiers: [.command], keyLabel: "←")
         check(arrow.menuKeyEquivalent == nil, "non-alphanumeric labels have no menu equivalent")
+
+        // The delayed-capture presets start at zero and ascend (menu order).
+        check(
+            Preferences.delayChoices.first == 0
+                && Preferences.delayChoices == Preferences.delayChoices.sorted(),
+            "delay choices start at 0 and ascend"
+        )
     }
 
     /// Save names must never collide when writing straight into a directory.

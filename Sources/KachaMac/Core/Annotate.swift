@@ -8,18 +8,24 @@ import CoreGraphics
 /// The tools the editor toolbar offers.
 enum Tool: CaseIterable {
     case rectangle
+    case ellipse
+    case line
     case arrow
     case pen
     case highlighter
+    case number
     case text
     case mosaic
 
     var label: String {
         switch self {
         case .rectangle: return "矩形"
+        case .ellipse: return "椭圆"
+        case .line: return "直线"
         case .arrow: return "箭头"
         case .pen: return "画笔"
         case .highlighter: return "高亮"
+        case .number: return "序号"
         case .text: return "文字"
         case .mosaic: return "马赛克"
         }
@@ -29,9 +35,12 @@ enum Tool: CaseIterable {
     var symbol: String {
         switch self {
         case .rectangle: return "rectangle"
+        case .ellipse: return "circle"
+        case .line: return "line.diagonal"
         case .arrow: return "arrow.up.right"
         case .pen: return "pencil.tip"
         case .highlighter: return "highlighter"
+        case .number: return "1.circle"
         case .text: return "textformat"
         case .mosaic: return "squareshape.split.3x3"
         }
@@ -113,5 +122,11 @@ struct Annotation: Equatable {
             maxX = max(maxX, p.x); maxY = max(maxY, p.y)
         }
         return CGRect(x: minX, y: minY, width: maxX - minX, height: maxY - minY)
+    }
+
+    /// The value for the next numbered marker: the highest existing badge plus
+    /// one (so deleting a badge never reuses its number). Pure → selfcheck.
+    static func nextNumber(in annotations: [Annotation]) -> Int {
+        (annotations.compactMap { $0.tool == .number ? Int($0.text) : nil }.max() ?? 0) + 1
     }
 }

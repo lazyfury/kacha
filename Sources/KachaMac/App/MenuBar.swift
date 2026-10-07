@@ -3,9 +3,10 @@
 import AppKit
 
 @MainActor
-final class MenuBar {
+final class MenuBar: NSObject, NSMenuDelegate {
     private let statusItem: NSStatusItem
     private let onCapture: () -> Void
+    private let onDelayedCapture: (Int) -> Void
     private let onFullScreen: () -> Void
     private let onPicker: () -> Void
     private let onViewer: () -> Void
@@ -15,9 +16,11 @@ final class MenuBar {
     private var captureItem: NSMenuItem?
     private var fullScreenItem: NSMenuItem?
     private var pickerItem: NSMenuItem?
+    private var delayItems: [NSMenuItem] = []
 
     init(
         onCapture: @escaping () -> Void,
+        onDelayedCapture: @escaping (Int) -> Void,
         onFullScreen: @escaping () -> Void,
         onPicker: @escaping () -> Void,
         onViewer: @escaping () -> Void,
@@ -26,6 +29,7 @@ final class MenuBar {
         onQuit: @escaping () -> Void
     ) {
         self.onCapture = onCapture
+        self.onDelayedCapture = onDelayedCapture
         self.onFullScreen = onFullScreen
         self.onPicker = onPicker
         self.onViewer = onViewer
@@ -33,6 +37,7 @@ final class MenuBar {
         self.onClosePins = onClosePins
         self.onQuit = onQuit
         self.statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        super.init()
     }
 
     func install() {
@@ -54,6 +59,24 @@ final class MenuBar {
         capture.target = self
         menu.addItem(capture)
         self.captureItem = capture
+
+        // The delayed-capture presets: choosing one sets the default and starts
+        // the countdown. The current default carries a checkmark.
+        let delay = NSMenuItem(title: "延时截图", action: nil, keyEquivalent: "")
+        let delayMenu = NSMenu()
+        for seconds in Preferences.delayChoices {
+            let item = NSMenuItem(
+                title: seconds == 0 ? "不延时" : "\(seconds) 秒",
+                action: #selector(delayClicked(_:)),
+                keyEquivalent: ""
+            )
+            item.tag = seconds
+            item.target = self
+            delayMenu.addItem(item)
+            delayItems.append(item)
+        }
+        delay.submenu = delayMenu
+        menu.addItem(delay)
 
         let fullScreen = NSMenuItem(
             title: "全屏截图",
@@ -93,6 +116,12 @@ final class MenuBar {
         menu.addItem(quit)
 
         statusItem.menu = menu
+        menu.delegate = self
+        updateShortcuts()
+    }
+
+    /// Refresh the menu state (shortcuts, delay checkmark) just before it opens.
+    func menuWillOpen(_ menu: NSMenu) {
         updateShortcuts()
     }
 
@@ -101,9 +130,13 @@ final class MenuBar {
         Preferences.captureHotkey.apply(to: captureItem)
         Preferences.fullScreenHotkey.apply(to: fullScreenItem)
         Preferences.pickerHotkey.apply(to: pickerItem)
+        for item in delayItems {
+            item.state = item.tag == Preferences.delaySeconds ? .on : .off
+        }
     }
 
     @objc private func captureClicked() { onCapture() }
+    @objc private func delayClicked(_ sender: NSMenuItem) { onDelayedCapture(sender.tag) }
     @objc private func fullScreenClicked() { onFullScreen() }
     @objc private func pickerClicked() { onPicker() }
     @objc private func viewerClicked() { onViewer() }

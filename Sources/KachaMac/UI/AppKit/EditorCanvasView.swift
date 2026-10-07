@@ -98,7 +98,7 @@ final class EditorCanvasView: NSView, NSTextFieldDelegate {
                 stroke: marker,
                 text: ""
             )
-        case .rectangle:
+        case .rectangle, .ellipse:
             return Annotation(
                 tool: tool,
                 points: [start],
@@ -138,6 +138,10 @@ final class EditorCanvasView: NSView, NSTextFieldDelegate {
             } else {
                 beginText(at: start, editing: nil)
             }
+            return
+        }
+        if state.tool == .number {
+            placeNumber(at: start)
             return
         }
         state.draft = makeDraft(tool: state.tool, at: start, image: image)
@@ -186,6 +190,21 @@ final class EditorCanvasView: NSView, NSTextFieldDelegate {
             let b = annotation.points[1]
             return abs(a.x - b.x) + abs(a.y - b.y) >= 2
         }
+    }
+
+    /// Place the next numbered marker at `point` (the number tool is a click, not
+    /// a drag).
+    private func placeNumber(at point: CGPoint) {
+        let annotation = Annotation(
+            tool: .number,
+            points: [point],
+            color: state.color,
+            stroke: state.textSize * state.strokeFactor,
+            text: "\(Annotation.nextNumber(in: state.annotations))"
+        )
+        state.annotations.append(annotation)
+        state.redo.removeAll()
+        needsDisplay = true
     }
 
     // MARK: - Text tool

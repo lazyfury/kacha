@@ -15,6 +15,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let overlays = OverlayController()
     private let pins = PinWindows()
     private let settings = SettingsWindow()
+    private let countdown = CountdownHUD()
     private lazy var editor = EditorWindow(pins: pins)
     private var menuBar: MenuBar?
     private var hotkeys: Hotkeys?
@@ -31,6 +32,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let menuBar = MenuBar(
             onCapture: { [weak self] in self?.startCapture() },
+            onDelayedCapture: { [weak self] seconds in self?.startDelayedCapture(seconds: seconds) },
             onFullScreen: { [weak self] in self?.startFullScreenCapture() },
             onPicker: { [weak self] in self?.startColorPicker() },
             onViewer: { [weak self] in self?.openViewer() },
@@ -87,6 +89,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        countdown.cancel()
         overlays.close()
         editor.close()
         pins.closeAll()
@@ -183,6 +186,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func startCapture() {
         startOverlay(mode: .capture)
+    }
+
+    /// Start a capture after `seconds` (0 = now), showing a countdown first.
+    private func startDelayedCapture(seconds: Int) {
+        Preferences.delaySeconds = seconds
+        menuBar?.updateShortcuts()
+        guard ScreenPermission.request() else {
+            presentPermissionAlert()
+            return
+        }
+        countdown.start(seconds: seconds) { [weak self] in
+            self?.startOverlay(mode: .capture)
+        }
     }
 
     @objc private func startColorPicker() {

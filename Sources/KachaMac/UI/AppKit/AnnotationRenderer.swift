@@ -92,6 +92,28 @@ final class AnnotationRenderer {
                 ctx.setLineWidth(width)
                 ctx.stroke(rect)
             }
+        case .ellipse:
+            if let rect = rectFrom(points) {
+                if annotation.filled {
+                    ctx.setFillColor(
+                        CGColor(srgbRed: color[0], green: color[1], blue: color[2], alpha: 0.35)
+                    )
+                    ctx.fillEllipse(in: rect)
+                }
+                ctx.setStrokeColor(cgColor)
+                ctx.setLineWidth(width)
+                ctx.strokeEllipse(in: rect)
+            }
+        case .line:
+            if let a = points.first, let b = points.dropFirst().first {
+                ctx.setStrokeColor(cgColor)
+                ctx.setLineWidth(width)
+                ctx.setLineCap(.round)
+                ctx.beginPath()
+                ctx.move(to: a)
+                ctx.addLine(to: b)
+                ctx.strokePath()
+            }
         case .arrow:
             if let a = points.first, let b = points.dropFirst().first {
                 ctx.setStrokeColor(cgColor)
@@ -141,9 +163,64 @@ final class AnnotationRenderer {
                     color: cgColor
                 )
             }
+        case .number:
+            if let center = points.first {
+                drawNumber(
+                    ctx,
+                    annotation.text,
+                    center: center,
+                    size: max(annotation.stroke * scale, 10),
+                    rgba: color
+                )
+            }
         case .mosaic:
             drawMosaic(ctx, annotation, imageRect: imageRect, image: image, composed: composed)
         }
+    }
+
+    /// A numbered marker: a filled disc in the annotation colour with the number
+    /// centred on top (black or white, whichever contrasts with the fill).
+    private func drawNumber(
+        _ ctx: CGContext,
+        _ text: String,
+        center: CGPoint,
+        size: CGFloat,
+        rgba: [CGFloat]
+    ) {
+        guard !text.isEmpty else { return }
+        let radius = size * 0.9
+        let disc = CGRect(
+            x: center.x - radius,
+            y: center.y - radius,
+            width: radius * 2,
+            height: radius * 2
+        )
+        ctx.setFillColor(CGColor(srgbRed: rgba[0], green: rgba[1], blue: rgba[2], alpha: rgba[3]))
+        ctx.fillEllipse(in: disc)
+
+        let luminance = 0.2126 * rgba[0] + 0.7152 * rgba[1] + 0.0722 * rgba[2]
+        let textColor: CGColor = luminance > 0.6
+            ? CGColor(srgbRed: 0, green: 0, blue: 0, alpha: 1)
+            : CGColor(srgbRed: 1, green: 1, blue: 1, alpha: 1)
+        let font = font(size)
+        let attributed = NSAttributedString(
+            string: text,
+            attributes: [
+                .font: font,
+                kCTForegroundColorAttributeName as NSAttributedString.Key: textColor,
+            ]
+        )
+        let line = CTLineCreateWithAttributedString(attributed)
+        let textSize = attributed.size()
+        let ascent = CTFontGetAscent(font)
+        ctx.saveGState()
+        ctx.textMatrix = CGAffineTransform(scaleX: 1, y: -1)
+        ctx.textPosition = CGPoint(
+            x: center.x - textSize.width / 2,
+            y: center.y - textSize.height / 2 + ascent
+        )
+        CTLineDraw(line, ctx)
+        ctx.restoreGState()
     }
 
     private func rectFrom(_ points: [CGPoint]) -> CGRect? {

@@ -13,7 +13,8 @@
 - **截图模式**：框选区域、点选窗口、点桌面抓整屏。
 - **框选层**：触发后先抓取所有显示器，「冻结」整个桌面；用户拖拽框选 / 调整手柄；
   `Enter` 确认、`Esc` 取消。层内带十字线、尺寸读数。
-- **编辑窗**：预览 + 标注（矩形 / 箭头 / 画笔 / 高亮 / 文字 / 马赛克）+ 撤销重做；
+- **编辑窗**：预览 + 标注（矩形 / 椭圆 / 直线 / 箭头 / 画笔 / 高亮 / 序号 / 文字 / 马赛克）
+  + 撤销重做；
   复制到剪贴板、保存 PNG、钉在桌面；**OCR 文字识别**（系统 Vision，离线）。
 - **取色器**：在冻帧上取样，放大镜 + hex，点击复制。
 - **看图模式**：菜单栏「看图」开一个空编辑窗（工具禁用），拖入图片后进入和截图一样的
@@ -96,6 +97,7 @@ kacha/
 │   │   │   ├── PinWindows.swift        # 钉图悬浮窗
 │   │   │   ├── ColorPicker.swift       # 放大镜 + 像素取样 + hex
 │   │   │   └── WindowChrome.swift      # 窗口 chrome / isReleasedWhenClosed 统一设置
+│   │   │   └── CountdownHUD.swift      # 延时截图的居中倒计时面板
 │   │   └── SwiftUI/              # NSHostingView 承载的 chrome
 │   │       ├── EditorRootView.swift     # 编辑窗：玻璃工具栏 + 画布 representable
 │   │       ├── OCRResultView.swift      # OCR 识别结果 sheet（可编辑 / 复制）
@@ -190,7 +192,10 @@ marker 工具，用 `defaultMarkerStroke`（最小 16px）的粗笔刷。
 - **马赛克**：`Mosaic.make` 把整张合成图按 `mosaicBlock` 做一次块平均并缓存，绘制时用
   `replacePathWithStrokedPath()` 把 freehand 折线变成粗笔刷轮廓 `clip()`，再把块平均图
   无插值放大画进去。所以是「涂抹」而不是拖矩形，而且每次重绘不重算平均色。
-- **矩形填充**：`Annotation.filled` 存在标注上；填充用颜色 alpha 0.35，然后再描边。
+- **矩形 / 椭圆填充**：`Annotation.filled` 存在标注上；填充用颜色 alpha 0.35，然后再描边。
+- **直线**：两个端点之间画一条圆头线（和箭头共用拖动式交互）。
+- **序号**：点一下放一个圆底数字徽标，编号取现有最大号 +1（`Annotation.nextNumber`），
+  文字颜色按徽标填充色亮度取黑 / 白；尺寸跟 `state.textSize`（图片对角线派生）。
 - **颜色 / 线宽**：工具栏改的是 `EditorState.color`（8 色）与 `strokeFactor`（乘
   `defaultStroke(image)`，4 档）；新建标注时快照到 `Annotation`。高亮的半透明色从所选颜色
   派生（alpha 0.35）。
@@ -249,6 +254,14 @@ iPhone 相册一致）。开启时画布暂停画标注，`Esc` 或再点按钮�
 读成 `CGImage` → `Compose.composed(from:)` 写回 `session.composed` 并置 `state.hasImage`，
 之后的标注 / 复制 / 保存 / 钉图 / OCR 流程与截图完全一致。
 
+### 4.12 延时截图
+
+菜单栏「延时截图」提供 3 / 5 / 10 秒预设（写进 `Preferences.delaySeconds`，设置窗同
+步一个 Picker）。选定后 `CountdownHUD` 在鼠标所在屏幕中央开一个半透明圆盘倒数，
+每秒重绘一次 `CountdownView`；归零时先 `cancel()`（`orderOut` 掉面板）再冻结屏幕，
+保证倒计时本身不会进冻帧（面板也开了 `sharingType = .none` 双保险）。面板是
+`.nonactivatingPanel + ignoresMouseEvents`，不抢焦点、不挡交互，用户可继续摆屏。
+
 ---
 
 ## 5. 数据流（时序）
@@ -296,6 +309,6 @@ iPhone 相册一致）。开启时画布暂停画标注，`Esc` 或再点按钮�
 - 形状 / 画笔的线宽有 4 档预设、颜色 8 色预设，但没有连续滑块 / 自定义取色。
 - 文字字号仍按对角线派生（没有字号选择器）；文字可点选 / 双击二次编辑。
 - 窗口拾取不做 app 级分组 / 子窗口选择。
-- 序号 / 椭圆 / 裁剪 / 延时 / 滚屏长图未做。
+- 裁剪 / 滚屏长图未做。
 - 多显示器非均匀缩放下的跨屏拼接以最大 scale 兜底，尚未逐屏混合。
 - Liquid Glass 只在 macOS 26+ 生效，旧系统是材质回退；部署目标仍是 14.0。
