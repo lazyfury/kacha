@@ -39,9 +39,6 @@ enum Tool: CaseIterable {
 
     /// Show the Chinese label instead of the SF Symbol (the symbol reads poorly).
     var showsTextOnly: Bool { self == .text }
-
-    /// Show the Chinese label next to the icon.
-    var showsLabel: Bool { self == .text || self == .highlighter }
 }
 
 /// SF Symbols used by the editor toolbar.
