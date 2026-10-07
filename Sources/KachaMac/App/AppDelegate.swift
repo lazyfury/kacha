@@ -31,6 +31,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// True from the moment a recording target is confirmed until it ends, so a
     /// second recording session cannot start on top of it.
     private var recordingActive = false
+    /// True while a quit is waiting for the recording to finish and be saved.
+    private var terminating = false
     private var captureMenuItem: NSMenuItem?
     private var pickerMenuItem: NSMenuItem?
     private var fullScreenMenuItem: NSMenuItem?
@@ -84,6 +86,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self.recordingActive = true
             self.beginRecording(target)
         }
+        overlays.onError = { [weak self] message in
+            self?.presentAlert("无法录制", informative: message, style: .informational)
+        }
 
         if options.smokeSettings {
             runSettingsSmoke()
@@ -113,7 +118,49 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         false
     }
 
+    /// Quitting mid-recording would otherwise lose it (and leak temp files):
+    /// offer to stop and save first. `.terminateLater` blocks the quit until the
+    /// file is placed; `finishRecording` calls `reply` when it is done.
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        guard recordingActive, #available(macOS 15.0, *),
+            let session = recordingSession as? RecordingSession
+        else {
+            return .terminateNow
+        }
+        if session.isFinishing {
+            // A stop / cancel is already in flight; just wait for it.
+            terminating = true
+            return .terminateLater
+        }
+        let response = presentAlert(
+            "正在录制",
+            informative: "退出会丢失当前录制。要先停止并保存吗？",
+            style: .warning,
+            buttons: ["停止并保存", "丢弃并退出", "取消"]
+        )
+        switch response {
+        case .alertFirstButtonReturn:
+            terminating = true
+            session.stop()
+            return .terminateLater
+        case .alertSecondButtonReturn:
+            session.abort()
+            recordingSession = nil
+            recordingActive = false
+            return .terminateNow
+        default:
+            return .terminateCancel
+        }
+    }
+
     func applicationWillTerminate(_ notification: Notification) {
+        // Finalizing a recording needs the async pipeline, which will not run
+        // during quit; abort it and drop the temp files instead of leaking them.
+        if #available(macOS 15.0, *), let session = recordingSession as? RecordingSession {
+            session.abort()
+        }
+        recordingSession = nil
+        recordingActive = false
         countdown.cancel()
         recordingBar.close()
         overlays.close()
@@ -122,20 +169,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func registerHotkeys() {
-        hotkeys?.set([
-            Hotkeys.Binding(id: 1, hotkey: Preferences.captureHotkey) { [weak self] in
+        let failed = hotkeys?.set([
+            Hotkeys.Binding(id: 1, name: "截图", hotkey: Preferences.captureHotkey) { [weak self] in
                 self?.startCapture()
             },
-            Hotkeys.Binding(id: 2, hotkey: Preferences.pickerHotkey) { [weak self] in
+            Hotkeys.Binding(id: 2, name: "取色器", hotkey: Preferences.pickerHotkey) { [weak self] in
                 self?.startColorPicker()
             },
-            Hotkeys.Binding(id: 3, hotkey: Preferences.fullScreenHotkey) { [weak self] in
+            Hotkeys.Binding(id: 3, name: "全屏截图", hotkey: Preferences.fullScreenHotkey) {
+                [weak self] in
                 self?.startFullScreenCapture()
             },
-            Hotkeys.Binding(id: 4, hotkey: Preferences.recordHotkey) { [weak self] in
+            Hotkeys.Binding(id: 4, name: "录制屏幕", hotkey: Preferences.recordHotkey) {
+                [weak self] in
                 self?.startRecording()
             },
-        ])
+        ]) ?? []
+        guard !failed.isEmpty else { return }
+        presentAlert(
+            "快捷键注册失败",
+            informative: "\(failed.joined(separator: "、"))已被其他应用占用，请在设置里换一个组合键。",
+            style: .warning
+        )
     }
 
     private func installMenu() {
@@ -235,7 +290,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             presentPermissionAlert()
             return
         }
-        countdown.start(seconds: seconds) { [weak self] in
+        countdown.start(seconds: seconds, onCancel: {}) { [weak self] in
             self?.startOverlay(mode: .capture)
         }
     }
@@ -297,6 +352,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 self.countdownMicMuted.toggle()
                 self.countdown.setMicMuted(self.countdownMicMuted)
             },
+            onCancel: { [weak self] in
+                // The record session was reserved before the countdown; release
+                // it so another recording can start.
+                self?.recordingActive = false
+            },
             onFinish: { [weak self] in
                 self?.startRecordingNow(
                     target,
@@ -319,6 +379,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         session.onFinish = { [weak self] result in
             self?.finishRecording(result)
         }
+        session.onWarning = { [weak self] message in
+            self?.presentAlert("录制提示", informative: message, style: .informational)
+        }
 
         Task { @MainActor in
             do {
@@ -333,7 +396,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self.recordMenuItem?.title = "正在录制…"
             self.recordMenuItem?.isEnabled = false
 
-            self.recordingBar.onStop = { session.stop() }
+            self.recordingBar.onStop = {
+                // Switch to "正在保存…" immediately: stop() then joins / muxes the
+                // segments, which can take a while for a long recording.
+                self.recordingBar.setSaving(true)
+                session.stop()
+            }
             self.recordingBar.onCancel = { session.cancel() }
             self.recordingBar.onToggleMic = {
                 self.micMuted.toggle()
@@ -342,8 +410,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
             self.recordingBar.onTogglePause = {
                 Task { @MainActor in
-                    await session.togglePause()
+                    let ok = await session.togglePause()
                     self.recordingBar.setPaused(session.isPaused)
+                    if !ok {
+                        self.presentAlert(
+                            "无法继续录制",
+                            informative: "恢复录制失败，请停止并保存已录内容。",
+                            style: .warning
+                        )
+                    }
                 }
             }
             self.recordingBar.setMicMuted(micMuted)
@@ -358,7 +433,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         recordingBar.onCancel = nil
         recordingBar.onToggleMic = nil
         recordingBar.onTogglePause = nil
-        recordingBar.close()
+        if #available(macOS 15.0, *), let session = recordingSession as? RecordingSession {
+            session.onWarning = nil
+        }
         self.recordingSession = nil
         self.recordingActive = false
         menuBar?.setRecording(false)
@@ -367,16 +444,39 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         switch result {
         case .success(let url):
-            placeRecording(url)
+            // The segments are already joined; placing the file can still take a
+            // moment (a cross-volume move or the save panel), so keep the bar's
+            // "正在保存…" state up until it lands. The move is off the main
+            // thread; only the save panel runs on it.
+            Task { @MainActor in
+                let final = await Export.saveMovieForRecording(at: url)
+                self.recordingBar.close()
+                if self.terminating {
+                    self.replyTerminationIfNeeded()
+                } else if let final {
+                    self.presentRecordingSaved(final)
+                }
+            }
         case .failure(let error):
-            if case RecordingError.cancelled = error { return }
+            recordingBar.close()
+            let wasTerminating = terminating
+            replyTerminationIfNeeded()
+            if wasTerminating || isCancellation(error) { return }
             presentCaptureError(error)
         }
     }
 
-    private func placeRecording(_ url: URL) {
-        guard let final = Export.saveMovie(at: url) else { return }
-        presentRecordingSaved(final)
+    /// Finish a pending quit (`applicationShouldTerminate` returned
+    /// `.terminateLater`).
+    private func replyTerminationIfNeeded() {
+        guard terminating else { return }
+        terminating = false
+        NSApp.reply(toApplicationShouldTerminate: true)
+    }
+
+    private func isCancellation(_ error: Error) -> Bool {
+        if case RecordingError.cancelled = error { return true }
+        return false
     }
 
     private func presentRecordingSaved(_ url: URL) {
@@ -638,14 +738,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    /// Debug (`--smoke-record`): open and close the recording control bar.
+    /// Debug (`--smoke-record`): open the recording control bar, flip it into
+    /// the saving state and close it — the panel lifecycle with no real capture.
     private func runRecordSmoke() {
         recordingBar.show(micAvailable: true, elapsed: { 5 })
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
-            self?.recordingBar.close()
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                FileHandle.standardError.write(Data("kacha smoke-record: ok\n".utf8))
-                exit(0)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+            self?.recordingBar.setSaving(true)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in
+                self?.recordingBar.close()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                    FileHandle.standardError.write(Data("kacha smoke-record: ok\n".utf8))
+                    exit(0)
+                }
             }
         }
     }

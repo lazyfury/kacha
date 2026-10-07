@@ -14,7 +14,7 @@ struct RecordingBarView: View {
     var body: some View {
         HStack(spacing: 12) {
             Circle()
-                .fill(model.paused ? Color.orange : Color.red)
+                .fill(model.saving ? Color.secondary : (model.paused ? Color.orange : Color.red))
                 .frame(width: 9, height: 9)
             Text(formatDuration(model.elapsed))
                 .font(.system(size: 13, weight: .medium))
@@ -22,21 +22,34 @@ struct RecordingBarView: View {
                 .frame(minWidth: 52, alignment: .leading)
             Divider()
                 .frame(height: 18)
-            if micAvailable {
+            if model.saving {
+                // The file is being finalized / moved; keep the bar up so the
+                // stop does not look like a hang on a large recording.
+                HStack(spacing: 8) {
+                    ProgressView()
+                        .controlSize(.small)
+                    Text("正在保存…")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                }
+                .frame(minWidth: 130, alignment: .leading)
+            } else {
+                if micAvailable {
+                    barButton(
+                        model.micMuted ? "mic.slash.fill" : "mic.fill",
+                        help: model.micMuted ? "打开麦克风" : "关闭麦克风",
+                        active: !model.micMuted,
+                        action: onToggleMic
+                    )
+                }
                 barButton(
-                    model.micMuted ? "mic.slash.fill" : "mic.fill",
-                    help: model.micMuted ? "打开麦克风" : "关闭麦克风",
-                    active: !model.micMuted,
-                    action: onToggleMic
+                    model.paused ? "play.fill" : "pause.fill",
+                    help: model.paused ? "继续录制" : "暂停录制",
+                    action: onTogglePause
                 )
+                barButton("stop.fill", help: "停止并保存", action: onStop)
+                barButton("xmark", help: "取消并丢弃", action: onCancel)
             }
-            barButton(
-                model.paused ? "play.fill" : "pause.fill",
-                help: model.paused ? "继续录制" : "暂停录制",
-                action: onTogglePause
-            )
-            barButton("stop.fill", help: "停止并保存", action: onStop)
-            barButton("xmark", help: "取消并丢弃", action: onCancel)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 9)

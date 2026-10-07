@@ -32,12 +32,13 @@ final class RecordingSession {
     private var segmentStart: Date?
     private var finishing = false
     private var cancelled = false
-
     /// Whether any segment captured the microphone (for the control bar).
     private(set) var micActive = false
 
     /// Called once when the recording ends (or is cancelled).
     var onFinish: ((Result<URL, Error>) -> Void)?
+    /// Called with a non-fatal problem (e.g. a failed audio mix) while finishing.
+    var onWarning: ((String) -> Void)?
 
     init(target: RecordingTarget, config: RecordingConfig, micMuted: Bool) {
         self.target = target
@@ -52,19 +53,29 @@ final class RecordingSession {
 
     var isPaused: Bool { segmentStart == nil && !finishing }
 
+    /// True once stop / cancel has begun and the segments are being finalized.
+    var isFinishing: Bool { finishing }
+
     func start() async throws {
         try await beginSegment()
     }
 
-    /// Pause (end the current segment) or resume (start a new one).
-    func togglePause() async {
+    /// Pause (end the current segment) or resume (start a new one). Returns
+    /// `false` when resuming failed, so the caller can surface it.
+    @discardableResult
+    func togglePause() async -> Bool {
         if segmentStart != nil {
             accumulated += Date().timeIntervalSince(segmentStart!)
             segmentStart = nil
             await endSegment()
-        } else {
-            guard !finishing else { return }
-            try? await beginSegment()
+            return true
+        }
+        guard !finishing else { return false }
+        do {
+            try await beginSegment()
+            return true
+        } catch {
+            return false
         }
     }
 
@@ -95,6 +106,24 @@ final class RecordingSession {
     func setMicMuted(_ muted: Bool) {
         userMicMuted = muted
         micRecorder?.setMuted(muted)
+    }
+
+    /// Best-effort synchronous cleanup for app termination: stop capturing and
+    /// drop the in-flight temp files without waiting for the async pipeline.
+    /// A recording cannot be finalized during quit, so this only avoids garbage.
+    func abort() {
+        guard !finishing else { return }
+        finishing = true
+        cancelled = true
+        segmentStart = nil
+        recorder?.cancel()
+        micRecorder?.stop { _, _ in }
+        for url in [currentVideo, currentMic].compactMap({ $0 }) {
+            try? FileManager.default.removeItem(at: url)
+        }
+        currentVideo = nil
+        currentMic = nil
+        removeSegments()
     }
 
     // MARK: - Segments
@@ -231,6 +260,8 @@ final class RecordingSession {
             ) {
                 audioURL = mixedURL
                 audioOffset = .zero
+            } else {
+                onWarning?("系统声音与麦克风混音失败，这一段只有麦克风音轨。")
             }
         }
         let output = FileManager.default.temporaryDirectory

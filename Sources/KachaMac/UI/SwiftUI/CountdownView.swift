@@ -13,6 +13,8 @@ struct CountdownView: View {
     @ObservedObject var model: CountdownModel
     let micAvailable: Bool
     let onToggleMic: () -> Void
+    /// When set, a cancel button is shown (used by the pre-recording countdown).
+    let onCancel: (() -> Void)?
 
     var body: some View {
         VStack(spacing: 8) {
@@ -28,18 +30,35 @@ struct CountdownView: View {
             }
             .frame(width: 88, height: 88)
 
-            if micAvailable {
-                Button {
-                    onToggleMic()
-                } label: {
-                    Image(systemName: model.micMuted ? "mic.slash.fill" : "mic.fill")
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(model.micMuted ? Color.secondary : Color.accentColor)
-                        .frame(width: 40, height: 30)
-                        .background(.regularMaterial, in: Capsule())
+            if micAvailable || onCancel != nil {
+                HStack(spacing: 8) {
+                    if micAvailable {
+                        Button {
+                            onToggleMic()
+                        } label: {
+                            Image(systemName: model.micMuted ? "mic.slash.fill" : "mic.fill")
+                                .font(.system(size: 15, weight: .semibold))
+                                .foregroundStyle(model.micMuted ? Color.secondary : Color.accentColor)
+                                .frame(width: 40, height: 30)
+                                .background(.regularMaterial, in: Capsule())
+                        }
+                        .buttonStyle(.plain)
+                        .help(model.micMuted ? "打开麦克风" : "关闭麦克风")
+                    }
+                    if let onCancel {
+                        Button {
+                            onCancel()
+                        } label: {
+                            Image(systemName: "xmark")
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundStyle(.secondary)
+                                .frame(width: 40, height: 30)
+                                .background(.regularMaterial, in: Capsule())
+                        }
+                        .buttonStyle(.plain)
+                        .help("取消")
+                    }
                 }
-                .buttonStyle(.plain)
-                .help(model.micMuted ? "打开麦克风" : "关闭麦克风")
             }
         }
     }

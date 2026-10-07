@@ -95,26 +95,17 @@ enum Export {
     /// (deduplicated), or a save panel. Returns the final URL, or nil when the
     /// user cancels (the temp file is removed).
     static func saveMovie(at tempURL: URL) -> URL? {
-        let manager = FileManager.default
         if let directory = Preferences.saveDirectory {
-            do {
-                try manager.createDirectory(at: directory, withIntermediateDirectories: true)
-                let existing = Set(
-                    (try? manager.contentsOfDirectory(atPath: directory.path)) ?? []
-                )
-                let name = deduplicatedName(
-                    timestampedName(extension: tempURL.pathExtension),
-                    existing: existing
-                )
-                let destination = directory.appendingPathComponent(name)
-                try manager.moveItem(at: tempURL, to: destination)
-                return destination
-            } catch {
+            switch moveIntoDirectory(tempURL, directory: directory) {
+            case .success(let url):
+                return url
+            case .failure(let error):
                 present("保存失败", error.localizedDescription)
                 return nil
             }
         }
 
+        let manager = FileManager.default
         let panel = NSSavePanel()
         panel.allowedContentTypes = [
             tempURL.pathExtension == "mov" ? .quickTimeMovie : .mpeg4Movie
@@ -138,6 +129,48 @@ enum Export {
                 present("保存失败", error.localizedDescription)
                 return nil
             }
+        }
+    }
+
+    /// Async variant used by the recording flow: the file move runs off the main
+    /// thread, so the control bar's "正在保存…" state keeps animating even when a
+    /// large recording is copied to another volume. The save panel still runs on
+    /// the main thread (AppKit).
+    @MainActor
+    static func saveMovieForRecording(at tempURL: URL) async -> URL? {
+        guard let directory = Preferences.saveDirectory else {
+            return saveMovie(at: tempURL)
+        }
+        let result = await Task.detached(priority: .userInitiated) {
+            moveIntoDirectory(tempURL, directory: directory)
+        }.value
+        switch result {
+        case .success(let url):
+            return url
+        case .failure(let error):
+            present("保存失败", error.localizedDescription)
+            return nil
+        }
+    }
+
+    /// Move `tempURL` into `directory` under a non-colliding timestamped name.
+    /// Pure file work (no AppKit), so it is safe to run off the main thread.
+    private static func moveIntoDirectory(_ tempURL: URL, directory: URL) -> Result<URL, Error> {
+        do {
+            let manager = FileManager.default
+            try manager.createDirectory(at: directory, withIntermediateDirectories: true)
+            let existing = Set(
+                (try? manager.contentsOfDirectory(atPath: directory.path)) ?? []
+            )
+            let name = deduplicatedName(
+                timestampedName(extension: tempURL.pathExtension),
+                existing: existing
+            )
+            let destination = directory.appendingPathComponent(name)
+            try manager.moveItem(at: tempURL, to: destination)
+            return .success(destination)
+        } catch {
+            return .failure(error)
         }
     }
 

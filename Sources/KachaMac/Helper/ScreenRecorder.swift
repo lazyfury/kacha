@@ -79,8 +79,26 @@ final class ScreenRecorder: NSObject {
         guard stream != nil, !reported else { return }
         self.cancelled = cancelled
         let stream = self.stream
-        Task {
+        Task { @MainActor in
             try? await stream?.stopCapture()
+            // The recording output's delegate normally finalizes the file. If it
+            // never arrives, settle the outcome ourselves so `RecordingSession`
+            // cannot hang waiting for a continuation that never resumes.
+            try? await Task.sleep(for: .seconds(3))
+            self.settle()
+        }
+    }
+
+    /// Fallback outcome when the delegate does not report after `stopCapture`.
+    private func settle() {
+        guard !reported else { return }
+        if cancelled {
+            if let url { try? FileManager.default.removeItem(at: url) }
+            report(.failure(RecordingError.cancelled))
+        } else if let url, FileManager.default.fileExists(atPath: url.path) {
+            report(.success(url))
+        } else {
+            report(.failure(RecordingError.startFailed("录制文件未写入。")))
         }
     }
 

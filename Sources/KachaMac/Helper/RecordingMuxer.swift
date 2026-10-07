@@ -64,11 +64,7 @@ enum RecordingMuxer {
         else {
             return nil
         }
-        export.outputURL = output
-        export.outputFileType = container == .mov ? .mov : .mp4
-        await withCheckedContinuation { continuation in
-            export.exportAsynchronously { continuation.resume() }
-        }
-        return export.status == .completed ? output : nil
+        let fileType: AVFileType = container == .mov ? .mov : .mp4
+        return await runMovieExport(export, to: output, as: fileType) ? output : nil
     }
 }

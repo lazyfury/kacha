@@ -11,6 +11,8 @@ final class Hotkeys {
     /// One binding: a stable id, its key combination and what it runs.
     struct Binding {
         let id: UInt32
+        /// Human label, used when registration fails.
+        let name: String
         let hotkey: Hotkey
         let action: () -> Void
     }
@@ -23,15 +25,18 @@ final class Hotkeys {
         installHandler()
     }
 
-    /// Replace every binding.
-    func set(_ bindings: [Binding]) {
+    /// Replace every binding. Returns the names whose registration failed (the
+    /// combination is taken by another app), so the caller can tell the user.
+    @discardableResult
+    func set(_ bindings: [Binding]) -> [String] {
         unregisterAll()
         actions.removeAll()
+        var failed: [String] = []
         for binding in bindings {
             actions[binding.id] = binding.action
             var ref: EventHotKeyRef?
             let id = EventHotKeyID(signature: Self.signature, id: binding.id)
-            RegisterEventHotKey(
+            let status = RegisterEventHotKey(
                 binding.hotkey.keyCode,
                 binding.hotkey.carbonModifiers,
                 id,
@@ -39,10 +44,13 @@ final class Hotkeys {
                 0,
                 &ref
             )
-            if let ref {
+            if status == noErr, let ref {
                 refs[binding.id] = ref
+            } else {
+                failed.append(binding.name)
             }
         }
+        return failed
     }
 
     fileprivate func dispatch(_ id: UInt32) {

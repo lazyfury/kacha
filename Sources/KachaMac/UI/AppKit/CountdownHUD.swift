@@ -15,15 +15,18 @@ final class CountdownHUD {
     private var remaining = 0
     private var onFinish: (() -> Void)?
     private var onToggleMic: (() -> Void)?
+    private var onCancel: (() -> Void)?
 
     /// Count down from `seconds`, then run `onFinish` on the main actor. Zero or
     /// less finishes immediately, so the caller needs no special case. When
-    /// `micAvailable`, a microphone toggle is shown and clicks are accepted.
+    /// `micAvailable`, a microphone toggle is shown; when `onCancel` is set, a
+    /// cancel button is shown and clicks are accepted.
     func start(
         seconds: Int,
         micAvailable: Bool = false,
         micMuted: Bool = false,
         onToggleMic: (() -> Void)? = nil,
+        onCancel: (() -> Void)? = nil,
         onFinish: @escaping () -> Void
     ) {
         cancel()
@@ -33,18 +36,21 @@ final class CountdownHUD {
         }
         self.onFinish = onFinish
         self.onToggleMic = onToggleMic
+        self.onCancel = onCancel
         remaining = seconds
         model.number = seconds
         model.micMuted = micMuted
 
+        let showControls = micAvailable || onCancel != nil
         let root = CountdownView(
             model: model,
             micAvailable: micAvailable,
-            onToggleMic: { [weak self] in self?.onToggleMic?() }
+            onToggleMic: { [weak self] in self?.onToggleMic?() },
+            onCancel: onCancel == nil ? nil : { [weak self] in self?.userCancel() }
         )
         let hosting = NSHostingController(rootView: root)
         let panel = NSPanel(
-            contentRect: NSRect(x: 0, y: 0, width: 96, height: micAvailable ? 140 : 96),
+            contentRect: NSRect(x: 0, y: 0, width: 96, height: showControls ? 132 : 96),
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: false
@@ -58,8 +64,8 @@ final class CountdownHUD {
         panel.animationBehavior = .none
         // Never let the countdown leak into a capture of our own overlay.
         panel.sharingType = .none
-        // The microphone toggle needs clicks; otherwise stay out of the way.
-        panel.ignoresMouseEvents = !micAvailable
+        // The controls need clicks; otherwise stay out of the way.
+        panel.ignoresMouseEvents = !showControls
         panel.contentView = hosting.view
         hosting.view.layoutSubtreeIfNeeded()
         panel.setContentSize(hosting.view.fittingSize)
@@ -100,7 +106,15 @@ final class CountdownHUD {
         panel = nil
         onFinish = nil
         onToggleMic = nil
+        onCancel = nil
         remaining = 0
+    }
+
+    /// The user hit cancel: stop the countdown and report it.
+    private func userCancel() {
+        let handler = onCancel
+        cancel()
+        handler?()
     }
 
     /// Centre of the display under the cursor.

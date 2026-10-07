@@ -10,6 +10,8 @@ final class RecordingBarModel: ObservableObject {
     @Published var elapsed: TimeInterval = 0
     @Published var micMuted = false
     @Published var paused = false
+    /// True once recording has stopped and the file is being finalized / saved.
+    @Published var saving = false
 }
 
 @MainActor
@@ -63,6 +65,7 @@ final class RecordingBar {
         self.panel = panel
 
         model.elapsed = elapsed()
+        model.saving = false
         timer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
             // The timer runs on the main run loop, so this is the main actor.
             MainActor.assumeIsolated {
@@ -76,6 +79,7 @@ final class RecordingBar {
         timer = nil
         panel?.orderOut(nil)
         panel = nil
+        model.saving = false
     }
 
     /// Reflect the microphone's mute state on the button.
@@ -86,6 +90,12 @@ final class RecordingBar {
     /// Reflect the paused state on the button.
     func setPaused(_ paused: Bool) {
         model.paused = paused
+    }
+
+    /// Switch the bar into the "正在保存…" state: the file is being written /
+    /// concatenated / placed, which can take a while for a large recording.
+    func setSaving(_ saving: Bool) {
+        model.saving = saving
     }
 
     /// Top-centre of the display under the cursor, just below the menu bar.

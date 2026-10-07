@@ -551,6 +551,8 @@ final class OverlayController {
     var onSave: ((CaptureSession) -> Void)?
     var onPick: ((CaptureSession, SCWindow) -> Void)?
     var onRecord: ((CaptureSession, RecordingTarget) -> Void)?
+    /// A non-fatal overlay problem to surface (e.g. a cross-display region).
+    var onError: ((String) -> Void)?
 
     /// Open one panel per display, over `session`'s frozen frames.
     func show(session: CaptureSession, windows: [SCWindow]) {
@@ -677,8 +679,17 @@ final class OverlayController {
     func confirm() {
         guard let session else { return }
         if session.mode == .record {
-            guard let selection = session.selection,
-                let display = anchorDisplay(for: selection, in: session)
+            guard let selection = session.selection else { return }
+            // A region is recorded from a single display; a selection spanning
+            // displays would silently lose the off-display part.
+            let overlaps = session.displayList.filter {
+                Selection.intersection(selection, $0.globalRect) != nil
+            }
+            if overlaps.count > 1 {
+                onError?("录制区域不能跨显示器，请重新框选。")
+                return
+            }
+            guard let display = overlaps.first ?? anchorDisplay(for: selection, in: session)
             else {
                 return
             }
