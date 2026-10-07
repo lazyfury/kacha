@@ -14,8 +14,18 @@ enum EditorAction {
     case close
 }
 
+/// What the overlay is for.
+enum OverlayMode {
+    /// Region / window / full-screen capture.
+    case capture
+    /// Pick a pixel colour and copy its hex.
+    case colorPicker
+}
+
 final class CaptureSession {
     private(set) var displays: [CGDirectDisplayID: CapturedDisplay] = [:]
+    /// What the overlay does with a click.
+    var mode: OverlayMode = .capture
     /// The current selection in global logical points (origin top-left).
     var selection: CGRect?
     /// The cropped selection, filled by `confirm()`.

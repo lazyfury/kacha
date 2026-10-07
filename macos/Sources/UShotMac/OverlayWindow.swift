@@ -75,7 +75,29 @@ final class SelectionView: NSView {
         guard let ctx = NSGraphicsContext.current?.cgContext else { return }
         let viewport = bounds
 
-        drawUnified(ctx, viewport: viewport)
+        if session.mode == .colorPicker {
+            drawColorPicker(ctx, viewport: viewport)
+        } else {
+            drawUnified(ctx, viewport: viewport)
+        }
+    }
+
+    /// The colour-picker overlay: crosshair + magnifier + hex readout.
+    private func drawColorPicker(_ ctx: CGContext, viewport: CGRect) {
+        guard let p = pointer else { return }
+        let imageX = Int(p.x * display.scale)
+        let imageY = Int(p.y * display.scale)
+        drawCrosshair(ctx, viewport: viewport)
+        guard let color = ColorPicker.pixel(display.image, x: imageX, y: imageY) else { return }
+        ColorPicker.drawMagnifier(
+            ctx,
+            image: display.image,
+            at: p,
+            imageX: imageX,
+            imageY: imageY,
+            color: color,
+            viewport: viewport
+        )
     }
 
     /// Unified region overlay: a settled selection wins; otherwise the window
@@ -174,6 +196,17 @@ final class SelectionView: NSView {
     override func mouseDown(with event: NSEvent) {
         let local = convert(event.locationInWindow, from: nil)
         pointer = local
+        if session.mode == .colorPicker {
+            let color = ColorPicker.pixel(
+                display.image,
+                x: Int(local.x * display.scale),
+                y: Int(local.y * display.scale)
+            )
+            if let color {
+                controller?.finishColorPick(color)
+            }
+            return
+        }
         let point = global(local)
         anchor = point
         didDrag = false
@@ -186,6 +219,10 @@ final class SelectionView: NSView {
     override func mouseDragged(with event: NSEvent) {
         let local = convert(event.locationInWindow, from: nil)
         pointer = local
+        if session.mode == .colorPicker {
+            needsDisplay = true
+            return
+        }
         let point = global(local)
         if !didDrag {
             let dx = point.x - anchor.x
@@ -199,6 +236,7 @@ final class SelectionView: NSView {
     }
 
     override func mouseUp(with event: NSEvent) {
+        if session.mode == .colorPicker { return }
         let wasNew: Bool
         if case .new = drag { wasNew = true } else { wasNew = false }
         let usable = session.selection.map { Selection.usable($0) } ?? false
@@ -220,7 +258,9 @@ final class SelectionView: NSView {
 
     override func mouseMoved(with event: NSEvent) {
         pointer = convert(event.locationInWindow, from: nil)
-        controller?.updateHover(at: NSEvent.mouseLocation)
+        if session.mode == .capture {
+            controller?.updateHover(at: NSEvent.mouseLocation)
+        }
         needsDisplay = true
     }
 
@@ -344,6 +384,14 @@ final class OverlayController {
             session?.hover = nil
         }
         refresh()
+    }
+
+    /// Copy the picked colour's hex and close.
+    func finishColorPick(_ color: NSColor) {
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(color.hexString, forType: .string)
+        dismiss()
     }
 
     /// A click: a window under the cursor is captured, otherwise the whole

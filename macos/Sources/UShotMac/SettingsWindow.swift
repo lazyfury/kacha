@@ -1,12 +1,13 @@
-// The settings window: the capture hotkey and launch-at-login.
+// The settings window: the capture and colour-picker hotkeys and
+// launch-at-login.
 
 import AppKit
 
 final class SettingsWindow: NSObject, NSWindowDelegate {
     private var window: NSWindow?
 
-    /// Called after the hotkey changed, so the shell can re-register it.
-    var onHotkeyChange: ((Hotkey) -> Void)?
+    /// Called after a hotkey changed, so the shell can re-register them.
+    var onHotkeyChange: (() -> Void)?
 
     var isOpen: Bool { window != nil }
 
@@ -18,7 +19,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         }
 
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 440, height: 190),
+            contentRect: NSRect(x: 0, y: 0, width: 460, height: 240),
             styleMask: [.titled, .closable],
             backing: .buffered,
             defer: false
@@ -27,10 +28,15 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         window.isReleasedWhenClosed = false
         window.delegate = self
 
-        let recorder = HotkeyRecorderView(hotkey: Preferences.captureHotkey)
-        recorder.onChange = { [weak self] hotkey in
+        let captureRecorder = HotkeyRecorderView(hotkey: Preferences.captureHotkey)
+        captureRecorder.onChange = { [weak self] hotkey in
             Preferences.captureHotkey = hotkey
-            self?.onHotkeyChange?(hotkey)
+            self?.onHotkeyChange?()
+        }
+        let pickerRecorder = HotkeyRecorderView(hotkey: Preferences.pickerHotkey)
+        pickerRecorder.onChange = { [weak self] hotkey in
+            Preferences.pickerHotkey = hotkey
+            self?.onHotkeyChange?()
         }
 
         let login = NSButton(
@@ -41,18 +47,18 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         login.state = LaunchAtLogin.isEnabled ? .on : .off
         login.isEnabled = LaunchAtLogin.isAvailable
 
-        let reset = NSButton(title: "恢复默认快捷键", target: self, action: #selector(resetHotkey))
+        let reset = NSButton(title: "恢复默认快捷键", target: self, action: #selector(resetHotkeys))
         reset.bezelStyle = .rounded
 
         let grid = NSGridView(views: [
-            [Self.label("截图快捷键"), recorder],
+            [Self.label("截图快捷键"), captureRecorder],
+            [Self.label("取色器快捷键"), pickerRecorder],
             [Self.label("启动"), login],
             [NSView(), reset],
         ])
         grid.rowSpacing = 12
         grid.columnSpacing = 14
         grid.translatesAutoresizingMaskIntoConstraints = false
-        // The value column may stretch; the label column stays compact.
         grid.column(at: 0).xPlacement = .trailing
         grid.column(at: 1).xPlacement = .leading
 
@@ -93,13 +99,14 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         }
     }
 
-    @objc private func resetHotkey() {
+    @objc private func resetHotkeys() {
         Preferences.captureHotkey = .default
-        onHotkeyChange?(.default)
-        // Reopen so the recorder shows the default.
-        let wasOpen = window
+        Preferences.pickerHotkey = .pickerDefault
+        onHotkeyChange?()
+        // Reopen so the recorders show the defaults.
+        let previous = window
         window = nil
-        wasOpen?.close()
+        previous?.close()
         show()
     }
 

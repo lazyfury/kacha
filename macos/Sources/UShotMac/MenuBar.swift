@@ -5,16 +5,20 @@ import AppKit
 final class MenuBar {
     private let statusItem: NSStatusItem
     private let onCapture: () -> Void
+    private let onPicker: () -> Void
     private let onSettings: () -> Void
     private let onQuit: () -> Void
     private var captureItem: NSMenuItem?
+    private var pickerItem: NSMenuItem?
 
     init(
         onCapture: @escaping () -> Void,
+        onPicker: @escaping () -> Void,
         onSettings: @escaping () -> Void,
         onQuit: @escaping () -> Void
     ) {
         self.onCapture = onCapture
+        self.onPicker = onPicker
         self.onSettings = onSettings
         self.onQuit = onQuit
         self.statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
@@ -36,6 +40,12 @@ final class MenuBar {
         menu.addItem(capture)
         self.captureItem = capture
 
+        let picker = NSMenuItem(title: "取色器", action: #selector(pickerClicked), keyEquivalent: "")
+        picker.target = self
+        menu.addItem(picker)
+        self.pickerItem = picker
+
+        menu.addItem(.separator())
         let settings = NSMenuItem(title: "设置…", action: #selector(settingsClicked), keyEquivalent: ",")
         settings.keyEquivalentModifierMask = [.command]
         settings.target = self
@@ -47,22 +57,28 @@ final class MenuBar {
         menu.addItem(quit)
 
         statusItem.menu = menu
-        updateCaptureShortcut(Preferences.captureHotkey)
+        updateShortcuts()
     }
 
-    /// Show the current capture shortcut next to the menu item.
-    func updateCaptureShortcut(_ hotkey: Hotkey) {
+    /// Show the current shortcuts next to the menu items.
+    func updateShortcuts() {
+        apply(Preferences.captureHotkey, to: captureItem)
+        apply(Preferences.pickerHotkey, to: pickerItem)
+    }
+
+    private func apply(_ hotkey: Hotkey, to item: NSMenuItem?) {
         let label = hotkey.keyLabel
         if label.count == 1, let character = label.first, character.isLetter || character.isNumber {
-            captureItem?.keyEquivalent = String(character).lowercased()
-            captureItem?.keyEquivalentModifierMask = hotkey.modifiers
+            item?.keyEquivalent = String(character).lowercased()
+            item?.keyEquivalentModifierMask = hotkey.modifiers
         } else {
-            captureItem?.keyEquivalent = ""
-            captureItem?.keyEquivalentModifierMask = []
+            item?.keyEquivalent = ""
+            item?.keyEquivalentModifierMask = []
         }
     }
 
     @objc private func captureClicked() { onCapture() }
+    @objc private func pickerClicked() { onPicker() }
     @objc private func settingsClicked() { onSettings() }
     @objc private func quitClicked() { onQuit() }
 }

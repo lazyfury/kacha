@@ -17,6 +17,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private lazy var editor = EditorWindow(pins: pins)
     private var menuBar: MenuBar?
     private var hotkeys: Hotkeys?
+    private var captureMenuItem: NSMenuItem?
+    private var pickerMenuItem: NSMenuItem?
 
     init(options: LaunchOptions) {
         self.options = options
@@ -27,19 +29,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let menuBar = MenuBar(
             onCapture: { [weak self] in self?.startCapture() },
+            onPicker: { [weak self] in self?.startColorPicker() },
             onSettings: { [weak self] in self?.settings.show() },
             onQuit: { NSApp.terminate(nil) }
         )
         menuBar.install()
         self.menuBar = menuBar
 
-        let hotkeys = Hotkeys { [weak self] in self?.startCapture() }
+        let hotkeys = Hotkeys()
         self.hotkeys = hotkeys
-        registerHotkey()
+        registerHotkeys()
 
-        settings.onHotkeyChange = { [weak self] hotkey in
-            self?.registerHotkey()
-            self?.menuBar?.updateCaptureShortcut(hotkey)
+        settings.onHotkeyChange = { [weak self] in
+            self?.registerHotkeys()
+            self?.menuBar?.updateShortcuts()
+            self?.updateMenuShortcuts()
         }
 
         overlays.onConfirm = { [weak self] session in
@@ -72,8 +76,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         pins.closeAll()
     }
 
-    private func registerHotkey() {
-        hotkeys?.register(Preferences.captureHotkey)
+    private func registerHotkeys() {
+        hotkeys?.set([
+            Hotkeys.Binding(id: 1, hotkey: Preferences.captureHotkey) { [weak self] in
+                self?.startCapture()
+            },
+            Hotkeys.Binding(id: 2, hotkey: Preferences.pickerHotkey) { [weak self] in
+                self?.startColorPicker()
+            },
+        ])
     }
 
     private func installMenu() {
@@ -82,17 +93,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         mainMenu.addItem(appItem)
         let appMenu = NSMenu()
 
-        let hotkey = Preferences.captureHotkey
         let capture = NSMenuItem(title: "截图", action: #selector(startCapture), keyEquivalent: "")
-        if hotkey.keyLabel.count == 1,
-            let character = hotkey.keyLabel.first,
-            character.isLetter || character.isNumber
-        {
-            capture.keyEquivalent = String(character).lowercased()
-            capture.keyEquivalentModifierMask = hotkey.modifiers
-        }
         capture.target = self
         appMenu.addItem(capture)
+        self.captureMenuItem = capture
+
+        let picker = NSMenuItem(title: "取色器", action: #selector(startColorPicker), keyEquivalent: "")
+        picker.target = self
+        appMenu.addItem(picker)
+        self.pickerMenuItem = picker
 
         let settings = NSMenuItem(title: "设置…", action: #selector(openSettings), keyEquivalent: ",")
         settings.keyEquivalentModifierMask = [.command]
@@ -107,6 +116,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
         appItem.submenu = appMenu
         NSApp.mainMenu = mainMenu
+        updateMenuShortcuts()
+    }
+
+    private func updateMenuShortcuts() {
+        apply(Preferences.captureHotkey, to: captureMenuItem)
+        apply(Preferences.pickerHotkey, to: pickerMenuItem)
+    }
+
+    private func apply(_ hotkey: Hotkey, to item: NSMenuItem?) {
+        let label = hotkey.keyLabel
+        if label.count == 1, let character = label.first, character.isLetter || character.isNumber {
+            item?.keyEquivalent = String(character).lowercased()
+            item?.keyEquivalentModifierMask = hotkey.modifiers
+        } else {
+            item?.keyEquivalent = ""
+            item?.keyEquivalentModifierMask = []
+        }
     }
 
     @objc private func openSettings() {
@@ -126,6 +152,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             do {
                 let result = try await Capture.frozenDisplays()
                 let session = CaptureSession()
+                for display in result.displays {
+                    session.setDisplay(display)
+                }
+                self.overlays.show(session: session, windows: result.windows)
+            } catch {
+                self.presentCaptureError(error)
+            }
+        }
+    }
+
+    /// Freeze every display and open the colour picker.
+    @objc private func startColorPicker() {
+        guard ScreenPermission.request() else {
+            presentPermissionAlert()
+            return
+        }
+        Task { @MainActor in
+            do {
+                let result = try await Capture.frozenDisplays()
+                let session = CaptureSession()
+                session.mode = .colorPicker
                 for display in result.displays {
                     session.setDisplay(display)
                 }

@@ -1,4 +1,4 @@
-// User preferences: the capture hotkey and launch-at-login, persisted in
+// User preferences: the capture/picker hotkeys and launch-at-login, persisted in
 // UserDefaults.
 
 import AppKit
@@ -10,8 +10,10 @@ struct Hotkey: Equatable {
     var modifiers: NSEvent.ModifierFlags
     var keyLabel: String
 
-    /// ⌘⇧A, the default.
+    /// ⌘⇧A, the default capture shortcut.
     static let `default` = Hotkey(keyCode: 0, modifiers: [.command, .shift], keyLabel: "A")
+    /// ⌘⇧C, the default colour-picker shortcut.
+    static let pickerDefault = Hotkey(keyCode: 8, modifiers: [.command, .shift], keyLabel: "C")
 
     /// The shortcut modifiers only (not caps lock / fn / numeric pad).
     static let relevantModifiers: NSEvent.ModifierFlags = [.command, .shift, .option, .control]
@@ -39,31 +41,36 @@ struct Hotkey: Equatable {
 enum Preferences {
     private static let defaults = UserDefaults.standard
 
-    private enum Key {
-        static let code = "captureKeyCode"
-        static let modifiers = "captureModifiers"
-        static let label = "captureKeyLabel"
+    /// The unified capture shortcut.
+    static var captureHotkey: Hotkey {
+        get { hotkey("capture", fallback: .default) }
+        set { setHotkey("capture", newValue) }
     }
 
-    static var captureHotkey: Hotkey {
-        get {
-            guard
-                let code = defaults.object(forKey: Key.code) as? Int,
-                let modifiers = defaults.object(forKey: Key.modifiers) as? Int,
-                let label = defaults.string(forKey: Key.label)
-            else {
-                return .default
-            }
-            return Hotkey(
-                keyCode: UInt32(code),
-                modifiers: NSEvent.ModifierFlags(rawValue: UInt(modifiers)),
-                keyLabel: label
-            )
+    /// The colour-picker shortcut.
+    static var pickerHotkey: Hotkey {
+        get { hotkey("picker", fallback: .pickerDefault) }
+        set { setHotkey("picker", newValue) }
+    }
+
+    private static func hotkey(_ name: String, fallback: Hotkey) -> Hotkey {
+        guard
+            let code = defaults.object(forKey: "\(name)KeyCode") as? Int,
+            let modifiers = defaults.object(forKey: "\(name)Modifiers") as? Int,
+            let label = defaults.string(forKey: "\(name)KeyLabel")
+        else {
+            return fallback
         }
-        set {
-            defaults.set(Int(newValue.keyCode), forKey: Key.code)
-            defaults.set(Int(newValue.modifiers.rawValue), forKey: Key.modifiers)
-            defaults.set(newValue.keyLabel, forKey: Key.label)
-        }
+        return Hotkey(
+            keyCode: UInt32(code),
+            modifiers: NSEvent.ModifierFlags(rawValue: UInt(modifiers)),
+            keyLabel: label
+        )
+    }
+
+    private static func setHotkey(_ name: String, _ value: Hotkey) {
+        defaults.set(Int(value.keyCode), forKey: "\(name)KeyCode")
+        defaults.set(Int(value.modifiers.rawValue), forKey: "\(name)Modifiers")
+        defaults.set(value.keyLabel, forKey: "\(name)KeyLabel")
     }
 }

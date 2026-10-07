@@ -2,6 +2,7 @@
 // no XCTest (this toolchain is Command Line Tools only). Exits non-zero on the
 // first failing check so it can gate a build.
 
+import AppKit
 import CoreGraphics
 import Foundation
 
@@ -17,6 +18,7 @@ enum SelfCheck {
         checkSelection(check)
         checkCompose(check)
         checkGeometry(check)
+        checkColor(check)
 
         print(failures == 0 ? "selfcheck: ok" : "selfcheck: \(failures) failure(s)")
         return failures == 0 ? 0 : 1
@@ -123,6 +125,34 @@ enum SelfCheck {
         check(defaultTextSize((3840, 2160)) > defaultTextSize((1600, 1000)), "text scales with the image")
         check(defaultStroke((100, 100)) >= 3, "stroke is clamped up")
         check(defaultTextSize((100, 100)) >= 14, "text is clamped up")
+    }
+
+    private static func checkColor(_ check: (Bool, String) -> Void) {
+        let colorSpace = CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB()
+        guard
+            let ctx = CGContext(
+                data: nil,
+                width: 2,
+                height: 1,
+                bitsPerComponent: 8,
+                bytesPerRow: 8,
+                space: colorSpace,
+                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+            )
+        else {
+            check(false, "could not build the colour test context")
+            return
+        }
+        ctx.setFillColor(CGColor(srgbRed: 0.2, green: 0.4, blue: 0.6, alpha: 1))
+        ctx.fill(CGRect(x: 0, y: 0, width: 2, height: 1))
+        guard let image = ctx.makeImage() else {
+            check(false, "could not build the colour test image")
+            return
+        }
+        let color = ColorPicker.pixel(image, x: 0, y: 0)
+        check(color != nil, "pixel samples a colour")
+        check(color?.hexString == "#336699", "hex is #336699, got \(color?.hexString ?? "nil")")
+        check(ColorPicker.pixel(image, x: 5, y: 0) == nil, "out-of-bounds pixel is nil")
     }
 
     private static func display(
