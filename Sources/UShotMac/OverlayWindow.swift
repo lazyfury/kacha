@@ -27,6 +27,9 @@ final class SelectionView: NSView {
     private var anchor: CGPoint = .zero
     /// Set once the pointer moved past `clickSlop` since mouse-down.
     private var didDrag = false
+    /// Whether a settled selection existed when the current press started — a
+    /// click outside it just clears it instead of capturing.
+    private var hadSelection = false
 
     /// A pointer that moved less than this (logical points) is a click, not a
     /// drag — the click-vs-region discrimination.
@@ -169,8 +172,8 @@ final class SelectionView: NSView {
     /// the two-level back (clear selection, then cancel) is explicit.
     private func drawHint(_ ctx: CGContext, viewport: CGRect, hasSelection: Bool) {
         let text = hasSelection
-            ? "Enter 完成 · 右键 / Esc 重新选择 · 点击空白处截全屏"
-            : "拖拽框选 · 点击窗口截窗口 · 点击空白处截全屏 · Esc 取消"
+            ? "Enter 完成 · 点空白 / 右键 / Esc 取消选区"
+            : "拖拽框选 · 点击窗口截窗口 · 点击空白处截整屏 · Esc 退出"
         let attributed = NSAttributedString(
             string: text,
             attributes: [
@@ -248,6 +251,7 @@ final class SelectionView: NSView {
         let point = global(local)
         anchor = point
         didDrag = false
+        hadSelection = session.selection != nil
         let (drag, selection) = Selection.begin(current: session.selection, at: point)
         self.drag = drag
         session.selection = selection
@@ -280,12 +284,20 @@ final class SelectionView: NSView {
         let usable = session.selection.map { Selection.usable($0) } ?? false
 
         if wasNew && (!didDrag || !usable) {
-            // A click: drop the stray rect and act on whatever is under the
-            // cursor — a window (capture it) or the desktop (capture the screen).
+            // A click. Outside a settled selection it only drops that selection
+            // (so a stray click cannot capture and lose the region); with no
+            // selection it acts on whatever is under the cursor: a window
+            // (capture it) or the desktop (capture the screen).
+            let hadSelection = self.hadSelection
             session.selection = nil
             drag = .none
             didDrag = false
-            controller?.click(at: NSEvent.mouseLocation, display: display)
+            self.hadSelection = false
+            if hadSelection {
+                controller?.refresh()
+            } else {
+                controller?.click(at: NSEvent.mouseLocation, display: display)
+            }
             return
         }
         session.selection = Selection.finish(drag, current: session.selection)
