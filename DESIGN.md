@@ -170,7 +170,8 @@ marker 工具，用 `defaultMarkerStroke`（最小 16px）的粗笔刷。
   `GlassEffectContainer`）。代码一律 `if #available(macOS 26.0, *)`，旧系统回退到 `.bar` /
   `.regularMaterial`，**部署目标保持 14.0**。
 - **编辑窗**：画布铺满，工具栏是无标题栏的玻璃浮条浮在顶部（`ZStack(alignment: .top)`），
-  当前工具用 accent 胶囊标记。
+  当前工具用 accent 胶囊标记。窗口 `contentMinSize = 640×460`；`titlebarAppearsTransparent`
+  + `titleVisibility = .hidden` + `titlebarSeparatorStyle = .none` 做成 macOS 26 式的无缝标题栏。
 - **设置窗**：SwiftUI 表单装在半透明玻璃卡片里；热键录制器仍是 AppKit（`NSButton` +
   本地 `NSEvent` 监听），通过 representable 嵌入。
 

@@ -29,7 +29,7 @@ struct EditorRootView: View {
             )
             .padding(.top, 12)
         }
-        .frame(minWidth: 320, minHeight: 240)
+        .frame(minWidth: 640, minHeight: 460)
     }
 }
 
@@ -96,6 +96,7 @@ private struct EditorToolbar: View {
                 active: false,
                 disabled: false,
                 showsLabel: true,
+                iconOffsetY: -1,
                 action: onCopy
             )
             ToolbarButton(
@@ -105,7 +106,7 @@ private struct EditorToolbar: View {
                 disabled: false,
                 showsLabel: true,
                 primary: true,
-                iconOffsetY: -4,
+                iconOffsetY: -2,
                 action: onSave
             )
             ToolbarButton(
