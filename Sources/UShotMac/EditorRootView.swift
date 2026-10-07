@@ -69,8 +69,8 @@ private struct EditorToolbar: View {
 
             separator
 
-            ColorMenu(color: $state.color)
-            StrokeMenu(factor: $state.strokeFactor)
+            ColorControl(color: $state.color)
+            StrokeControl(factor: $state.strokeFactor)
             ToolbarButton(
                 symbol: state.rectangleFilled ? ToolbarSymbol.fillOn : ToolbarSymbol.fillOff,
                 title: "矩形填充",
@@ -196,23 +196,15 @@ private struct ToolbarButton: View {
     }
 }
 
-/// The colour picker: a swatch that opens a menu of preset colours.
-private struct ColorMenu: View {
+/// The colour picker: the current colour as a swatch; the popover shows a grid
+/// of colour previews.
+private struct ColorControl: View {
     @Binding var color: [CGFloat]
+    @State private var showing = false
 
     var body: some View {
-        Menu {
-            ForEach(AnnotationPalette.colors, id: \.self) { entry in
-                Button {
-                    color = entry.rgba
-                } label: {
-                    if entry.rgba == color {
-                        Label(entry.name, systemImage: "checkmark")
-                    } else {
-                        Text(entry.name)
-                    }
-                }
-            }
+        Button {
+            showing.toggle()
         } label: {
             Circle()
                 .fill(Color(red: color[0], green: color[1], blue: color[2]))
@@ -221,44 +213,89 @@ private struct ColorMenu: View {
                 .frame(width: 28, height: 26)
                 .contentShape(Rectangle())
         }
-        .menuStyle(.borderlessButton)
-        .menuIndicator(.hidden)
-        .fixedSize()
+        .buttonStyle(.plain)
         .help("颜色")
+        .popover(isPresented: $showing) {
+            LazyVGrid(
+                columns: Array(repeating: GridItem(.fixed(26), spacing: 10), count: 4),
+                spacing: 10
+            ) {
+                ForEach(AnnotationPalette.colors, id: \.self) { entry in
+                    Button {
+                        color = entry.rgba
+                        showing = false
+                    } label: {
+                        Circle()
+                            .fill(Color(red: entry.rgba[0], green: entry.rgba[1], blue: entry.rgba[2]))
+                            .frame(width: 20, height: 20)
+                            .overlay(Circle().strokeBorder(Color.primary.opacity(0.2), lineWidth: 1))
+                            .padding(3)
+                            .overlay(
+                                Circle().strokeBorder(
+                                    entry.rgba == color ? Color.accentColor : Color.clear,
+                                    lineWidth: 2
+                                )
+                            )
+                    }
+                    .buttonStyle(.plain)
+                    .help(entry.name)
+                }
+            }
+            .padding(12)
+        }
     }
 }
 
-/// The stroke-width picker: a line that opens a menu of presets.
-private struct StrokeMenu: View {
+/// The stroke-width picker: the current thickness as a line; the popover lists
+/// the presets with a line preview each.
+private struct StrokeControl: View {
     @Binding var factor: CGFloat
+    @State private var showing = false
 
     var body: some View {
-        Menu {
-            ForEach(AnnotationPalette.strokePresets.indices, id: \.self) { index in
-                Button {
-                    factor = AnnotationPalette.strokePresets[index].factor
-                } label: {
-                    if abs(AnnotationPalette.strokePresets[index].factor - factor) < 0.001 {
-                        Label(
-                            AnnotationPalette.strokePresets[index].name,
-                            systemImage: "checkmark"
-                        )
-                    } else {
-                        Text(AnnotationPalette.strokePresets[index].name)
-                    }
-                }
-            }
+        Button {
+            showing.toggle()
         } label: {
             Capsule()
                 .fill(Color.primary)
-                .frame(width: 18, height: max(2, min(6, factor * 2)))
+                .frame(width: 18, height: max(2, min(7, factor * 2.5)))
                 .frame(width: 28, height: 26)
                 .contentShape(Rectangle())
         }
-        .menuStyle(.borderlessButton)
-        .menuIndicator(.hidden)
-        .fixedSize()
+        .buttonStyle(.plain)
         .help("粗细")
+        .popover(isPresented: $showing) {
+            VStack(alignment: .leading, spacing: 8) {
+                ForEach(AnnotationPalette.strokePresets.indices, id: \.self) { index in
+                    Button {
+                        factor = AnnotationPalette.strokePresets[index].factor
+                        showing = false
+                    } label: {
+                        HStack(spacing: 10) {
+                            Capsule()
+                                .fill(Color.primary)
+                                .frame(
+                                    width: 70,
+                                    height: max(
+                                        2,
+                                        min(10, AnnotationPalette.strokePresets[index].factor * 3)
+                                    )
+                                )
+                            Text(AnnotationPalette.strokePresets[index].name)
+                                .frame(width: 34, alignment: .leading)
+                            if abs(AnnotationPalette.strokePresets[index].factor - factor) < 0.001 {
+                                Image(systemName: "checkmark")
+                            }
+                            Spacer(minLength: 0)
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(12)
+            .frame(width: 170)
+        }
     }
 }
 
