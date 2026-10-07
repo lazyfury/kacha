@@ -32,8 +32,6 @@ let package = Package(
                 ]),
                 .linkedFramework("AppKit"),
                 .linkedFramework("AVFoundation"),
-                .linkedFramework("Metal"),
-                .linkedFramework("MetalKit"),
                 .linkedFramework("QuartzCore"),
                 .linkedFramework("CoreGraphics"),
                 .linkedFramework("CoreImage"),
