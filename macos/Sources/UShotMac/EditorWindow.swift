@@ -1,39 +1,46 @@
-// The editor window: a normal titled window whose `HostView` runs the Rust
-// `EditorApp` over the session's composed image.
-//
-// `show(session:)` takes ownership of the session; closing the window (red
-// button or ⌘W) destroys the Rust app and drops the session.
+// The editor window: a normal titled window with a toolbar and a Core Graphics
+// canvas. Closing it (red button or ⌘W) tears everything down.
 
 import AppKit
-import UShotNative
 
 final class EditorWindow: NSObject, NSWindowDelegate {
     private var window: NSWindow?
-    private var view: HostView?
-    private var app: OpaquePointer?
-    private var session: UInt64 = 0
+    private var canvas: EditorCanvasView?
+    private var state: EditorState?
+    private var session: CaptureSession?
+    private var toolButtons: [NSButton] = []
+    private let pins: PinWindows
 
-    /// Whether the editor window is on screen.
+    init(pins: PinWindows) {
+        self.pins = pins
+    }
+
     var isOpen: Bool { window != nil }
 
-    /// Open an editor for `session` (the composed image lives in Rust).
-    func show(session: UInt64) {
+    /// Open an editor for `session` (the composed image lives in it).
+    func show(session: CaptureSession) {
         close()
 
-        var imageWidth: UInt32 = 900
-        var imageHeight: UInt32 = 600
-        _ = ushot_session_composed_size(session, &imageWidth, &imageHeight)
-        let visible = NSScreen.main?.visibleFrame.size ?? NSSize(width: 1440, height: 900)
-        let contentSize = NSSize(
-            width: min(max(CGFloat(imageWidth) + 32, 640), visible.width - 40),
-            height: min(max(CGFloat(imageHeight) + 96, 460), visible.height - 40)
+        let composed = session.composed
+        let imageSize = composed.map { CGSize(width: $0.width, height: $0.height) }
+            ?? CGSize(width: 900, height: 600)
+        let visible = NSScreen.main?.visibleFrame.size ?? CGSize(width: 1440, height: 900)
+        let contentSize = CGSize(
+            width: min(max(imageSize.width + 32, 640), visible.width - 40),
+            height: min(max(imageSize.height + 96, 460), visible.height - 40)
         )
 
-        let view = HostView(frame: NSRect(origin: .zero, size: contentSize))
-        // A real title bar handles dragging; the toolbar is at the very top of
-        // the content, so nothing may be swallowed there.
-        view.interceptsTitlebar = false
-        self.view = view
+        let state = EditorState()
+        if let composed {
+            let size = (composed.width, composed.height)
+            state.stroke = defaultStroke(size)
+            state.textSize = defaultTextSize(size)
+        }
+        self.state = state
+        self.session = session
+
+        let canvas = EditorCanvasView(session: session, state: state)
+        self.canvas = canvas
 
         let window = NSWindow(
             contentRect: NSRect(origin: .zero, size: contentSize),
@@ -42,119 +49,152 @@ final class EditorWindow: NSObject, NSWindowDelegate {
             defer: false
         )
         window.title = "ushot — 编辑"
-        // ARC owns this window; AppKit must not also release it on close (that
-        // double release is an `objc_release` crash when the red button is used).
+        // ARC owns this window; AppKit must not also release it on close.
         window.isReleasedWhenClosed = false
-        window.contentView = view
         window.delegate = self
+
+        let container = NSView(frame: NSRect(origin: .zero, size: contentSize))
+        let toolbar = buildToolbar()
+        container.addSubview(toolbar)
+        container.addSubview(canvas)
+        toolbar.translatesAutoresizingMaskIntoConstraints = false
+        canvas.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            toolbar.topAnchor.constraint(equalTo: container.topAnchor, constant: 8),
+            toolbar.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 8),
+            toolbar.trailingAnchor.constraint(lessThanOrEqualTo: container.trailingAnchor, constant: -8),
+            canvas.topAnchor.constraint(equalTo: toolbar.bottomAnchor, constant: 8),
+            canvas.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            canvas.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+            canvas.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+        ])
+        window.contentView = container
         window.center()
         window.makeKeyAndOrderFront(nil)
-        window.makeFirstResponder(view)
-        // Resolve the backing scale before `pixelSize` (the view was built
-        // outside a window and its first geometry pass used 1x).
-        window.layoutIfNeeded()
+        window.makeFirstResponder(canvas)
         self.window = window
-        self.session = session
+        updateToolButtons()
+    }
 
-        let (pixelWidth, pixelHeight) = view.pixelSize
-        guard
-            let app = ushot_host_start(
-                Unmanaged.passUnretained(view.metalLayer).toOpaque(),
-                pixelWidth,
-                pixelHeight,
-                view.scaleFactor,
-                UInt32(USHOT_ROLE_EDITOR),
-                session,
-                0
-            )
-        else {
-            window.orderOut(nil)
-            self.window = nil
-            self.view = nil
-            ushot_session_drop(session)
-            self.session = 0
-            return
+    // MARK: - Toolbar
+
+    private func buildToolbar() -> NSStackView {
+        let row = NSStackView()
+        row.orientation = .horizontal
+        row.spacing = 6
+        row.alignment = .centerY
+
+        toolButtons = Tool.allCases.enumerated().map { index, tool in
+            let button = NSButton(title: tool.label, target: self, action: #selector(selectTool(_:)))
+            button.bezelStyle = .rounded
+            button.tag = index
+            row.addArrangedSubview(button)
+            return button
         }
-        self.app = app
-        view.app = app
-        // Reconfigure the surface whenever the drawable changes (live resize,
-        // backing change) instead of polling once a frame.
-        view.onGeometryChange = { [weak view] width, height, scale in
-            guard let app = view?.app else { return }
-            ushot_host_resize(app, width, height, scale)
+        row.addArrangedSubview(spacer(width: 12))
+        row.addArrangedSubview(actionButton("撤销", #selector(undo)))
+        row.addArrangedSubview(actionButton("重做", #selector(redo)))
+        row.addArrangedSubview(actionButton("复制", #selector(copyImage)))
+        row.addArrangedSubview(actionButton("保存", #selector(saveImage)))
+        row.addArrangedSubview(actionButton("钉图", #selector(pinImage)))
+        row.addArrangedSubview(actionButton("关闭", #selector(closeEditor)))
+        return row
+    }
+
+    private func actionButton(_ title: String, _ action: Selector) -> NSButton {
+        let button = NSButton(title: title, target: self, action: action)
+        button.bezelStyle = .rounded
+        return button
+    }
+
+    private func spacer(width: CGFloat) -> NSView {
+        let view = NSView()
+        view.translatesAutoresizingMaskIntoConstraints = false
+        view.widthAnchor.constraint(equalToConstant: width).isActive = true
+        return view
+    }
+
+    @objc private func selectTool(_ sender: NSButton) {
+        guard Tool.allCases.indices.contains(sender.tag) else { return }
+        state?.tool = Tool.allCases[sender.tag]
+        updateToolButtons()
+    }
+
+    private func updateToolButtons() {
+        let current = state?.tool
+        for (index, button) in toolButtons.enumerated() {
+            let active = Tool.allCases[index] == current
+            button.bezelColor = active ? .controlAccentColor : nil
         }
     }
 
-    /// Run one frame.
-    func frameAll() {
-        guard let app, let view else { return }
-        ushot_host_frame(app)
-        view.syncFrameState()
+    @objc private func undo() {
+        state?.undo()
+        canvas?.needsDisplay = true
     }
 
-    /// Whether the editor wants another frame.
-    func needsFrame() -> Bool {
-        app.map { ushot_host_needs_frame($0) } ?? false
+    @objc private func redo() {
+        state?.redoLast()
+        canvas?.needsDisplay = true
     }
 
-    /// Park an action (copy/save/pin/close) as a toolbar button would.
-    func requestAction(_ action: UInt32) {
-        if let app {
-            ushot_host_request_action(app, action)
+    @objc private func copyImage() {
+        guard let data = canvas?.renderExport() else { return }
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setData(data, forType: .png)
+    }
+
+    @objc private func saveImage() {
+        guard let data = canvas?.renderExport() else { return }
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.png]
+        panel.nameFieldStringValue = Self.timestamp() + ".png"
+        panel.canCreateDirectories = true
+        if panel.runModal() == .OK, let url = panel.url {
+            do {
+                try data.write(to: url)
+            } catch {
+                let alert = NSAlert()
+                alert.messageText = "保存失败"
+                alert.informativeText = error.localizedDescription
+                alert.runModal()
+            }
         }
     }
 
-    /// The editor's pending action (0 none, 1 copy, 2 save, 3 pin, 4 close).
-    func takeAction() -> UInt32 {
-        app.map { ushot_host_take_action($0) } ?? 0
+    @objc private func pinImage() {
+        guard let data = canvas?.renderExport() else { return }
+        pins.pin(data)
     }
 
-    /// The PNG for the pending action, or nil.
-    func actionPNG() -> Data? {
-        guard let app else { return nil }
-        let length = ushot_host_action_png(app, nil, 0)
-        guard length > 0 else { return nil }
-        var bytes = [UInt8](repeating: 0, count: length)
-        let copied = bytes.withUnsafeMutableBufferPointer { buffer in
-            ushot_host_action_png(app, buffer.baseAddress, length)
-        }
-        return copied == length ? Data(bytes) : nil
+    @objc private func closeEditor() {
+        close()
     }
 
-    /// Release the pending action's PNG.
-    func actionDone() {
-        if let app {
-            ushot_host_action_done(app)
-        }
+    private static func timestamp() -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyyMMdd-HHmmss"
+        return "ushot-" + formatter.string(from: Date())
+    }
+
+    // MARK: - Teardown
+
+    /// Debug: render the editor's current image (the `--smoke-export` path).
+    func exportForSmoke() -> Data? {
+        canvas?.renderExport()
     }
 
     func windowWillClose(_ notification: Notification) {
         close()
     }
 
-    /// Debug: close through AppKit's own path (the red button / ⌘W), so the
-    /// `windowWillClose` teardown is exercised.
-    func smokeClose() {
-        window?.performClose(nil)
-    }
-
-    /// Tear the editor down and drop the session.
     func close() {
-        // Stop the view forwarding input *before* the Rust app is freed: ordering
-        // the window out can synchronously deliver events (mouseExited, resign
-        // key) that would otherwise reach the freed pointer.
-        view?.app = nil
-        view?.onGeometryChange = nil
-        if let app {
-            ushot_host_destroy(app)
-            self.app = nil
-        }
         window?.orderOut(nil)
         window = nil
-        view = nil
-        if session != 0 {
-            ushot_session_drop(session)
-            session = 0
-        }
+        canvas = nil
+        state = nil
+        session = nil
+        toolButtons = []
     }
 }

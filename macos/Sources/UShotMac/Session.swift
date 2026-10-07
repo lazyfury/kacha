@@ -1,0 +1,48 @@
+// The capture session: the shared state a capture's windows use.
+//
+// Created before the overlay panels and dropped when the capture finishes. Holds
+// the frozen displays, the current selection and the composed image.
+
+import CoreGraphics
+import ScreenCaptureKit
+
+/// What the editor asks the shell to do with the finished image.
+enum EditorAction {
+    case copy
+    case save
+    case pin
+    case close
+}
+
+final class CaptureSession {
+    private(set) var displays: [CGDirectDisplayID: CapturedDisplay] = [:]
+    /// The current selection in global logical points (origin top-left).
+    var selection: CGRect?
+    /// The cropped selection, filled by `confirm()`.
+    var composed: ComposedImage?
+    /// The window under the cursor (global logical points), for window picking.
+    var hover: CGRect?
+    /// Whether the overlay is in window-pick mode.
+    var pickMode = false
+    /// Set when a window was clicked; the shell captures it.
+    var picked = false
+
+    func setDisplay(_ display: CapturedDisplay) {
+        displays[display.displayID] = display
+    }
+
+    func display(_ id: CGDirectDisplayID) -> CapturedDisplay? {
+        displays[id]
+    }
+
+    /// The displays in ascending id order.
+    var displayList: [CapturedDisplay] {
+        displays.values.sorted { $0.displayID < $1.displayID }
+    }
+
+    /// Confirm the current selection: crop it out of the frozen frames.
+    func confirm() {
+        guard let selection, Selection.usable(selection) else { return }
+        composed = Compose.compose(displayList, selection: selection)
+    }
+}
