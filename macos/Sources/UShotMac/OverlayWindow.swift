@@ -272,6 +272,26 @@ final class SelectionView: NSView {
     // MARK: - Keyboard
 
     override func keyDown(with event: NSEvent) {
+        if session.mode == .colorPicker {
+            switch event.keyCode {
+            case 53:  // Escape
+                controller?.cancel()
+            case 36, 76:  // Return / keypad Enter: pick at the cursor
+                if let p = pointer {
+                    let color = ColorPicker.pixel(
+                        display.image,
+                        x: Int(p.x * display.scale),
+                        y: Int(p.y * display.scale)
+                    )
+                    if let color {
+                        controller?.finishColorPick(color)
+                    }
+                }
+            default:
+                break
+            }
+            return
+        }
         switch event.keyCode {
         case 53:  // Escape
             controller?.cancel()
