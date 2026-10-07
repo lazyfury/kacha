@@ -28,8 +28,8 @@
 
 ## 2. 总体架构
 
-一句话：**AppKit 拥有窗口、系统能力与事件；Core Graphics 拥有全部 UI 绘制与图像处理；
-ScreenCaptureKit 提供像素数据。**
+一句话：**AppKit 拥有窗口、系统能力与事件；SwiftUI 负责编辑 / 设置窗口的 chrome（macOS 26
+上是 Liquid Glass）；Core Graphics 拥有全部画布绘制与图像处理；ScreenCaptureKit 提供像素数据。**
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -40,17 +40,22 @@ ScreenCaptureKit 提供像素数据。**
 │  ScreenCaptureKit（冻帧 / 窗列表 / 单窗口捕获）              │
 │  NSPasteboard / NSSavePanel / TCC 权限                       │
 ├─────────────────────────────────────────────────────────────┤
+│ SwiftUI (NSHostingView)                                     │
+│  编辑窗工具栏（玻璃浮条）/ 设置窗表卡                       │
+│  macOS 26+：glassEffect / GlassEffectContainer；否则材质回退 │
+├─────────────────────────────────────────────────────────────┤
 │ Core Graphics (Swift)                                       │
 │  NSView.draw → CGContext：遮罩 / 选区 / 手柄 / 十字线 / 文字  │
-│  编辑器画布：底图 + 标注栅格化                                │
+│  编辑器画布：底图 + 标注栅格化（AppKit 仍管画布）            │
 │  Compose：选区 → 原生像素 RGBA；PNG：ImageIO 编码            │
 └─────────────────────────────────────────────────────────────┘
 ```
 
-- **没有 FFI 边界**：窗口、UI、图像处理都在同一个 Swift 进程 / 同一个主线程。
-- **没有渲染循环**：窗口是 AppKit 普通视图，状态变化时 `setNeedsDisplay`；不跑
+- **同一个进程 / 主线程**：AppKit 宿主窗口，SwiftUI 通过 `NSHostingView` 嵌入，画布与
+  热键录制器通过 `NSViewRepresentable` / `NSHostingView` 双向桥接；没有 FFI 边界。
+- **没有渲染循环**：画布是 AppKit 普通视图，状态变化时 `setNeedsDisplay`；不跑
   `CADisplayLink` / Metal。
-- **帧由事件驱动**：鼠标 / 键盘事件改 `CaptureSession` 的状态，视图重绘。
+- **帧由事件驱动**：鼠标 / 键盘事件改 `CaptureSession` / `EditorState` 的状态，视图重绘。
 
 ---
 
@@ -73,12 +78,14 @@ ushot/
 │   ├── Selection.swift           # 选区几何与拖拽状态（纯逻辑）
 │   ├── Compose.swift             # 选区 → 原生像素 RGBA
 │   ├── ColorPicker.swift         # 放大镜 + 像素取样 + hex
-│   ├── EditorWindow.swift        # 编辑窗 + 工具栏
-│   ├── EditorCanvasView.swift    # 画布：底图 + 标注 + 坐标映射
-│   ├── Annotate.swift            # 标注数据模型
+│   ├── EditorWindow.swift        # 编辑窗（NSWindow 宿主）
+│   ├── EditorRootView.swift      # 编辑窗 SwiftUI：玻璃工具栏 + 画布 representable
+│   ├── EditorCanvasView.swift    # 画布：底图 + 标注 + 坐标映射（AppKit）
+│   ├── Annotate.swift            # 标注数据模型 + SF Symbols
 │   ├── PinWindows.swift          # 钉图悬浮窗
-│   ├── SettingsWindow.swift      # 设置窗
-│   ├── HotkeyRecorderView.swift  # 热键录制按钮
+│   ├── SettingsWindow.swift      # 设置窗（NSWindow 宿主）
+│   ├── SettingsRootView.swift    # 设置窗 SwiftUI：玻璃卡片 + 热键录制 representable
+│   ├── HotkeyRecorderView.swift  # AppKit 热键录制按钮
 │   ├── PNG.swift                 # ImageIO PNG 编码
 │   └── SelfCheck.swift           # --selfcheck 纯逻辑断言
 ├── packaging/Info.plist          # LSUIElement=true、LSMinimumSystemVersion=14.0
@@ -154,6 +161,19 @@ marker 工具，用 `defaultMarkerStroke`（最小 16px）的粗笔刷。
   `replacePathWithStrokedPath()` 把 freehand 折线变成粗笔刷轮廓 `clip()`，再把块平均图
   无插值放大画进去。所以是「涂抹」而不是拖矩形，而且每次重绘不重算平均色。
 
+### 4.8 UI 框架与 Liquid Glass
+
+- **分工**：AppKit 宿窗口与原生事件；SwiftUI 只做编辑窗工具栏和设置窗表单；画布 / 覆盖层
+  仍是 AppKit + Core Graphics（自绘 + 鼠标 / IME）。两边界用 `NSHostingView`
+  （SwiftUI→AppKit）和 `NSViewRepresentable`（AppKit→SwiftUI）桥接。
+- **Liquid Glass 是 macOS 26+**（`glassEffect` / `.buttonStyle(.glass)` /
+  `GlassEffectContainer`）。代码一律 `if #available(macOS 26.0, *)`，旧系统回退到 `.bar` /
+  `.regularMaterial`，**部署目标保持 14.0**。
+- **编辑窗**：画布铺满，工具栏是无标题栏的玻璃浮条浮在顶部（`ZStack(alignment: .top)`），
+  当前工具用 accent 胶囊标记。
+- **设置窗**：SwiftUI 表单装在半透明玻璃卡片里；热键录制器仍是 AppKit（`NSButton` +
+  本地 `NSEvent` 监听），通过 representable 嵌入。
+
 ---
 
 ## 5. 数据流（时序）
@@ -203,3 +223,4 @@ marker 工具，用 `defaultMarkerStroke`（最小 16px）的粗笔刷。
 - 窗口拾取不做 app 级分组 / 子窗口选择。
 - 序号 / 椭圆 / 裁剪 / 延时 / OCR / 滚屏长图未做。
 - 多显示器非均匀缩放下的跨屏拼接以最大 scale 兜底，尚未逐屏混合。
+- Liquid Glass 只在 macOS 26+ 生效，旧系统是材质回退；部署目标仍是 14.0。

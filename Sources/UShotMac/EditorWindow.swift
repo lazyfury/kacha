@@ -1,14 +1,14 @@
-// The editor window: a normal titled window with a toolbar and a Core Graphics
+// The editor window: a SwiftUI host (Liquid Glass toolbar) over the AppKit
 // canvas. Closing it (red button or ⌘W) tears everything down.
 
 import AppKit
+import SwiftUI
 
 final class EditorWindow: NSObject, NSWindowDelegate {
     private var window: NSWindow?
     private var canvas: EditorCanvasView?
     private var state: EditorState?
     private var session: CaptureSession?
-    private var toolButtons: [NSButton] = []
     private let pins: PinWindows
 
     init(pins: PinWindows) {
@@ -52,108 +52,34 @@ final class EditorWindow: NSObject, NSWindowDelegate {
         // ARC owns this window; AppKit must not also release it on close.
         window.isReleasedWhenClosed = false
         window.delegate = self
+        window.backgroundColor = NSColor(calibratedWhite: 0.08, alpha: 1)
 
-        let container = NSView(frame: NSRect(origin: .zero, size: contentSize))
-        let toolbar = buildToolbar()
-        container.addSubview(toolbar)
-        container.addSubview(canvas)
-        toolbar.translatesAutoresizingMaskIntoConstraints = false
-        canvas.translatesAutoresizingMaskIntoConstraints = false
-        NSLayoutConstraint.activate([
-            toolbar.topAnchor.constraint(equalTo: container.topAnchor, constant: 8),
-            toolbar.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 8),
-            toolbar.trailingAnchor.constraint(lessThanOrEqualTo: container.trailingAnchor, constant: -8),
-            canvas.topAnchor.constraint(equalTo: toolbar.bottomAnchor, constant: 8),
-            canvas.leadingAnchor.constraint(equalTo: container.leadingAnchor),
-            canvas.trailingAnchor.constraint(equalTo: container.trailingAnchor),
-            canvas.bottomAnchor.constraint(equalTo: container.bottomAnchor),
-        ])
-        window.contentView = container
+        let root = EditorRootView(
+            state: state,
+            canvas: canvas,
+            onCopy: { [weak self] in self?.copyImage() },
+            onSave: { [weak self] in self?.saveImage() },
+            onPin: { [weak self] in self?.pinImage() },
+            onClose: { [weak self] in self?.close() }
+        )
+        window.contentView = NSHostingView(rootView: root)
+
         window.center()
         window.makeKeyAndOrderFront(nil)
         window.makeFirstResponder(canvas)
         self.window = window
-        updateToolButtons()
     }
 
-    // MARK: - Toolbar
+    // MARK: - Actions
 
-    private func buildToolbar() -> NSStackView {
-        let row = NSStackView()
-        row.orientation = .horizontal
-        row.spacing = 6
-        row.alignment = .centerY
-
-        toolButtons = Tool.allCases.enumerated().map { index, tool in
-            let button = symbolButton(tool.symbol, title: tool.label, action: #selector(selectTool(_:)))
-            button.tag = index
-            row.addArrangedSubview(button)
-            return button
-        }
-        row.addArrangedSubview(spacer(width: 12))
-        row.addArrangedSubview(symbolButton(ToolbarSymbol.undo, title: "撤销", action: #selector(undo)))
-        row.addArrangedSubview(symbolButton(ToolbarSymbol.redo, title: "重做", action: #selector(redo)))
-        row.addArrangedSubview(symbolButton(ToolbarSymbol.copy, title: "复制", action: #selector(copyImage)))
-        row.addArrangedSubview(symbolButton(ToolbarSymbol.save, title: "保存", action: #selector(saveImage)))
-        row.addArrangedSubview(symbolButton(ToolbarSymbol.pin, title: "钉图", action: #selector(pinImage)))
-        row.addArrangedSubview(symbolButton(ToolbarSymbol.close, title: "关闭", action: #selector(closeEditor)))
-        return row
-    }
-
-    /// A toolbar button that prefers an SF Symbol, with a text fallback.
-    private func symbolButton(_ symbol: String, title: String, action: Selector) -> NSButton {
-        if let image = NSImage(systemSymbolName: symbol, accessibilityDescription: title) {
-            let button = NSButton(image: image, target: self, action: action)
-            button.bezelStyle = .rounded
-            button.imagePosition = .imageOnly
-            button.toolTip = title
-            return button
-        }
-        let button = NSButton(title: title, target: self, action: action)
-        button.bezelStyle = .rounded
-        return button
-    }
-
-    private func spacer(width: CGFloat) -> NSView {
-        let view = NSView()
-        view.translatesAutoresizingMaskIntoConstraints = false
-        view.widthAnchor.constraint(equalToConstant: width).isActive = true
-        return view
-    }
-
-    @objc private func selectTool(_ sender: NSButton) {
-        guard Tool.allCases.indices.contains(sender.tag) else { return }
-        state?.tool = Tool.allCases[sender.tag]
-        updateToolButtons()
-    }
-
-    private func updateToolButtons() {
-        let current = state?.tool
-        for (index, button) in toolButtons.enumerated() {
-            let active = Tool.allCases[index] == current
-            button.bezelColor = active ? .controlAccentColor : nil
-            button.contentTintColor = active ? .white : nil
-        }
-    }
-
-    @objc private func undo() {
-        state?.undo()
-        canvas?.needsDisplay = true
-    }
-
-    @objc private func redo() {
-        state?.redoLast()
-        canvas?.needsDisplay = true
-    }
-
-    @objc private func copyImage() {
+    private func copyImage() {
         guard let data = canvas?.renderExport() else { return }
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
         pasteboard.setData(data, forType: .png)
     }
 
-    @objc private func saveImage() {
+    private func saveImage() {
         guard let data = canvas?.renderExport() else { return }
         let panel = NSSavePanel()
         panel.allowedContentTypes = [.png]
@@ -171,13 +97,9 @@ final class EditorWindow: NSObject, NSWindowDelegate {
         }
     }
 
-    @objc private func pinImage() {
+    private func pinImage() {
         guard let data = canvas?.renderExport() else { return }
         pins.pin(data)
-    }
-
-    @objc private func closeEditor() {
-        close()
     }
 
     private static func timestamp() -> String {
@@ -203,6 +125,5 @@ final class EditorWindow: NSObject, NSWindowDelegate {
         canvas = nil
         state = nil
         session = nil
-        toolButtons = []
     }
 }

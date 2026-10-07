@@ -1,6 +1,7 @@
 # ushot
 
-macOS 截图工具。**纯 Swift**：AppKit 管窗口、Core Graphics 画界面、ScreenCaptureKit 抓屏。
+macOS 截图工具。**纯 Swift**：AppKit 管窗口、Core Graphics 画界面、ScreenCaptureKit 抓屏；
+编辑 / 设置窗口的界面用 **SwiftUI**（macOS 26 上是 Liquid Glass，旧系统回退到材质）。
 菜单栏常驻（`.accessory` + `LSUIElement`），无常驻主窗，窗口只在需要时打开。
 
 没有 Rust、没有 C ABI、没有第三方 UI 依赖。`Package.swift` 在仓库根目录，Xcode 直接打开
@@ -14,7 +15,8 @@ macOS 截图工具。**纯 Swift**：AppKit 管窗口、Core Graphics 画界面�
 - **取色器**（默认 `⌘⇧C`）：在冻帧上取样，放大镜 + hex 读数；点击或 `Enter` 复制 hex，
   `Esc` 取消。
 - **编辑窗**：矩形 / 箭头 / 画笔 / 文字（支持 IME）/ **半透明粗笔高亮** /
-  **可涂抹马赛克** + 撤销重做；复制到剪贴板、保存 PNG、钉到桌面（始终置顶悬浮窗）。
+  **可涂抹马赛克** + 撤销重做；工具栏是 SwiftUI **Liquid Glass** 浮条，画布仍是 AppKit。
+  复制到剪贴板、保存 PNG、钉到桌面（始终置顶悬浮窗）。
 - **设置**：自定义截图 / 取色两个全局热键、开机自启。
 - 截图与导出都是**原生像素**（Retina 2x）。
 
@@ -37,12 +39,14 @@ Sources/UShotMac/
   Compose.swift           选区 → 原生像素 RGBA
   ColorPicker.swift       取色器放大镜 + hex
 
-  EditorWindow.swift      编辑窗（普通带标题栏窗口 + 工具栏）
+  EditorWindow.swift      编辑窗（NSWindow 宿主）
+  EditorRootView.swift    编辑窗 SwiftUI：玻璃工具栏 + 画布 representable
   EditorCanvasView.swift  画布：合成图 + 标注绘制 + 图像/视图坐标映射
-  Annotate.swift          标注数据模型
+  Annotate.swift          标注数据模型 + SF Symbols
   PinWindows.swift        钉图悬浮窗
-  SettingsWindow.swift    设置窗
-  HotkeyRecorderView.swift 热键录制按钮
+  SettingsWindow.swift    设置窗（NSWindow 宿主）
+  SettingsRootView.swift  设置窗 SwiftUI：玻璃卡片 + 热键录制 representable
+  HotkeyRecorderView.swift AppKit 热键录制按钮
   PNG.swift               ImageIO PNG 编码
   SelfCheck.swift         `--selfcheck` 纯逻辑断言
 

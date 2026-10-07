@@ -1,8 +1,8 @@
 # AGENTS.md — ushot
 
 macOS 截图工具。**纯 Swift 应用**：AppKit 管窗口 / 原生事件与系统能力，Core Graphics 画界面
-并做全部图像处理，ScreenCaptureKit 抓屏。没有 Rust、没有 C ABI、没有第三方 UI 依赖。
-设计见 [`DESIGN.md`](DESIGN.md)。
+并做全部图像处理，ScreenCaptureKit 抓屏；编辑 / 设置窗口的 chrome 用 SwiftUI。
+没有 Rust、没有 C ABI、没有第三方 UI 依赖。设计见 [`DESIGN.md`](DESIGN.md)。
 
 ## 硬规则
 
@@ -10,8 +10,12 @@ macOS 截图工具。**纯 Swift 应用**：AppKit 管窗口 / 原生事件与�
    唯一可执行目标是 `Sources/UShotMac`。不往仓库里丢构建产物（见 `.gitignore`）。
 2. **AppKit 拥有窗口与系统能力。** 窗口 / `NSView` / 事件、状态栏、全局热键、
    ScreenCaptureKit、剪贴板、保存面板、权限都留在 Swift 壳里。
-3. **渲染用 Core Graphics。** 覆盖层与编辑画布都用 `NSView.draw(_:)` + `CGContext`；
-   没有渲染循环（`CADisplayLink` / Metal），只在状态变化时 `setNeedsDisplay`。
+3. **渲染用 Core Graphics，chrome 用 SwiftUI。** 覆盖层与编辑画布用 `NSView.draw(_:)` +
+   `CGContext`；没有渲染循环（`CADisplayLink` / Metal）。编辑 / 设置窗口的工具栏、表单是
+   SwiftUI，通过 `NSHostingView` 挂进 `NSWindow`，画布 / 热键录制用 `NSViewRepresentable`
+   嵌入。Liquid Glass（`glassEffect` / `.buttonStyle(.glass)` / `GlassEffectContainer`）是
+   **macOS 26+**：一律 `if #available(macOS 26.0, *)`，否则回退到 `.bar` / `.regularMaterial`；
+   部署目标保持 14.0。
 4. **会话是共享状态。** 一次截图的冻帧、选区、合成图、悬停窗口放在 `CaptureSession`，
    覆盖层 / 编辑窗共享同一实例。大图用 `CGImage`，不要跨窗口反复拷贝。
 5. **无常驻主窗。** 产品是菜单栏 app（`main.swift` 里 `.accessory` + 打包 `LSUIElement`），
@@ -50,9 +54,9 @@ macOS 截图工具。**纯 Swift 应用**：AppKit 管窗口 / 原生事件与�
 - **高亮 / 马赛克是「涂抹」工具，不是形状。** 两者都按 freehand 折线累积点；高亮用半透明
   黄色 + 粗 round-cap 线，马赛克把整图块平均一次（`Mosaic.make`，缓存）后用
   `replacePathWithStrokedPath()` 裁成粗笔刷再画。别退回成拖矩形。
-- **编辑器工具栏用 SF Symbols**（`NSImage(systemSymbolName:)`）。工具图标写在 `Tool.symbol`，
-  动作图标写在 `ToolbarSymbol`；缺符号会回退成文字按钮。`--selfcheck` 会解析
-  `ToolbarSymbol.all`，拼错直接失败而不是静默回退。
+- **编辑器工具栏用 SwiftUI + SF Symbols。** 图标写在 `Tool.symbol` / `ToolbarSymbol`；缺符号
+  回退成文字。`--selfcheck` 会解析 `ToolbarSymbol.all`，拼错直接失败。玻璃风格只在 macOS 26+
+  生效，旧系统走材质回退——别把 `glassEffect` 写在 `#available` 外面，否则部署目标 14.0 会报错。
 - **CGContext 画文字 `position` 是基线（baseline），不是左上角。** 要按字体度量（ascent /
   lineHeight）换算；当成左上角会让文字标注上移 / size 标签溢出。
 

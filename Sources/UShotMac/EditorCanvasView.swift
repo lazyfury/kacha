@@ -6,20 +6,22 @@
 // the on-screen preview and the native-pixel export, so they match exactly.
 
 import AppKit
+import Combine
 import CoreGraphics
 import CoreText
 
-/// The editor's shared state.
-final class EditorState {
-    var tool: Tool = .rectangle
+/// The editor's shared state. `ObservableObject` so the SwiftUI toolbar reacts
+/// to the active tool and to undo / redo availability.
+final class EditorState: ObservableObject {
+    @Published var tool: Tool = .rectangle
     /// RGBA in 0...1.
     var color: [CGFloat] = [1, 0.2, 0.2, 1]
     /// Stroke width in image pixels, for the shape tools.
     var stroke: CGFloat = 2
     /// Font size in image pixels, for the text tool.
     var textSize: CGFloat = 18
-    var annotations: [Annotation] = []
-    var redo: [Annotation] = []
+    @Published var annotations: [Annotation] = []
+    @Published var redo: [Annotation] = []
     var draft: Annotation?
     /// The image's on-screen rect, recorded by the last paint.
     var imageRect: CGRect = .zero
