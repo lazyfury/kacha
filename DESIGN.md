@@ -52,8 +52,8 @@
 └─────────────────────────────────────────────────────────────┘
 ```
 
-- **同一个进程 / 主线程**：AppKit 宿主窗口，SwiftUI 通过 `NSHostingView` 嵌入，画布与
-  热键录制器通过 `NSViewRepresentable` / `NSHostingView` 双向桥接；没有 FFI 边界。
+- **同一个进程 / 主线程**：AppKit 宿主窗口，SwiftUI 通过 `NSHostingView` 嵌入，画布通过
+  `NSViewRepresentable` 双向桥接；热键录制是 SwiftUI 控件 + 本地 `NSEvent` 监听。没有 FFI 边界。
 - **没有渲染循环**：画布是 AppKit 普通视图，状态变化时 `setNeedsDisplay`；不跑
   `CADisplayLink` / Metal。
 - **帧由事件驱动**：鼠标 / 键盘事件改 `CaptureSession` / `EditorState` 的状态，视图重绘。
@@ -85,8 +85,8 @@ ushot/
 │   ├── Annotate.swift            # 标注数据模型 + SF Symbols
 │   ├── PinWindows.swift          # 钉图悬浮窗
 │   ├── SettingsWindow.swift      # 设置窗（NSWindow 宿主）
-│   ├── SettingsRootView.swift    # 设置窗 SwiftUI：玻璃卡片 + 热键录制 representable
-│   ├── HotkeyRecorderView.swift  # AppKit 热键录制按钮
+│   ├── SettingsRootView.swift    # 设置窗 SwiftUI：系统设置风顶栏 / 卡片 / 底栏
+│   ├── HotkeyRecorderView.swift  # SwiftUI 热键录制按钮 + 本地 NSEvent 监听
 │   ├── PNG.swift                 # ImageIO PNG 编码
 │   └── SelfCheck.swift           # --selfcheck 纯逻辑断言
 ├── packaging/Info.plist          # LSUIElement=true、LSMinimumSystemVersion=14.0
@@ -180,13 +180,21 @@ marker 工具，用 `defaultMarkerStroke`（最小 16px）的粗笔刷。
 - **Liquid Glass 是 macOS 26+**（`glassEffect` / `.buttonStyle(.glass)` /
   `GlassEffectContainer`）。代码一律 `if #available(macOS 26.0, *)`，旧系统回退到 `.bar` /
   `.regularMaterial`，**部署目标保持 14.0**。
+- **新外观由链接 SDK 版本决定。** SwiftPM 默认把部署目标（14.0）当作
+  `LC_BUILD_VERSION.sdk`，系统就按 macOS 15 旧外观画控件（小开关、不透明窗口、无玻璃）。
+  `Package.swift` 用 linker flag `-platform_version macos 14.0 26.0` 把 sdk 钉到 26.0，
+  才会启用 macOS 26 外观。验证：`vtool -show-build .build/debug/ushot-mac` 显示 `sdk 26.0`。
 - **编辑窗**：`.fullSizeContentView`，顶部一条留给工具栏（`VStack`：工具栏 + 画布，居中），
   画布只在工具栏下方，图片不会被浮条压住。因为标题栏没得拖了，浮条最左边加了一个
   `WindowDragArea` 拖拽把手（调 `performDrag`）。当前工具用 accent 胶囊标记。窗口
   `contentMinSize = 840×460`；`titlebarAppearsTransparent` + `titleVisibility = .hidden` +
   `titlebarSeparatorStyle = .none`。
-- **设置窗**：原生 `Form(.grouped)` 分组表单（系统设置的样子，自动继承 macOS 26 外观）；
-  热键录制器仍是 AppKit（`NSButton` + 本地 `NSEvent` 监听），通过 `NSViewRepresentable` 嵌入。
+- **设置窗**：对齐 macOS 26 系统设置的观感。窗口用 `.fullSizeContentView` +
+  `titlebarAppearsTransparent` + `titleVisibility = .hidden`，SwiftUI 自己画顶栏标题
+  （左边距避开红绿灯）、原生 `Form(.grouped)` 卡片和底部动作栏。分节标题 / 说明是卡片内的
+  第一行（不再是卡外的 `Section` header，也不带 SF Symbol 图标）；热键是普通 SwiftUI
+  `Button`（走系统 26 的按钮 chrome），不再是 AppKit `NSButton`。按键捕获用本地 `NSEvent`
+  监听：`NSEvent.addLocalMonitorForEvents(matching: [.keyDown])`。
 
 ### 4.9 钉图
 

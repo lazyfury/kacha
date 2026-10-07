@@ -12,10 +12,12 @@ macOS 截图工具。**纯 Swift 应用**：AppKit 管窗口 / 原生事件与�
    ScreenCaptureKit、剪贴板、保存面板、权限都留在 Swift 壳里。
 3. **渲染用 Core Graphics，chrome 用 SwiftUI。** 覆盖层与编辑画布用 `NSView.draw(_:)` +
    `CGContext`；没有渲染循环（`CADisplayLink` / Metal）。编辑 / 设置窗口的工具栏、表单是
-   SwiftUI，通过 `NSHostingView` 挂进 `NSWindow`，画布 / 热键录制用 `NSViewRepresentable`
-   嵌入。Liquid Glass（`glassEffect` / `.buttonStyle(.glass)` / `GlassEffectContainer`）是
+   SwiftUI，通过 `NSHostingView` 挂进 `NSWindow`，画布用 `NSViewRepresentable` 嵌入；
+   设置窗全部是 SwiftUI（含热键录制按钮），只有按键捕获用本地 `NSEvent` 监听。
+   Liquid Glass（`glassEffect` / `.buttonStyle(.glass)` / `GlassEffectContainer`）是
    **macOS 26+**：一律 `if #available(macOS 26.0, *)`，否则回退到 `.bar` / `.regularMaterial`；
-   部署目标保持 14.0。
+   部署目标保持 14.0。**二进制必须记录链接 SDK ≥ 26.0**（见下方踩坑），否则系统按旧
+   外观画控件（小开关、不透明窗口）。
 4. **会话是共享状态。** 一次截图的冻帧、选区、合成图、悬停窗口放在 `CaptureSession`，
    覆盖层 / 编辑窗共享同一实例。大图用 `CGImage`，不要跨窗口反复拷贝。
 5. **无常驻主窗。** 产品是菜单栏 app（`main.swift` 里 `.accessory` + 打包 `LSUIElement`），
@@ -60,6 +62,17 @@ macOS 截图工具。**纯 Swift 应用**：AppKit 管窗口 / 原生事件与�
   不要用 `.borderedProminent` / `.glassProminent` 这类系统按钮样式（会和玻璃图标按钮不成套）。
   `--selfcheck` 会解析 `ToolbarSymbol.all`，拼错直接失败。玻璃风格只在 macOS 26+ 生效——别把
   `glassEffect` 写在 `#available` 外面，否则部署目标 14.0 会报错。
+- **SwiftPM 会把部署目标当成链接 SDK 版本写进 `LC_BUILD_VERSION`。** 结果二进制记的是
+  `sdk 14.0`，macOS 就按旧外观（macOS 15）画所有控件——开关是小号的、窗口不透明、没有
+  Liquid Glass。`Package.swift` 里用 linker flag 钉死平台版本才会启用新外观：
+  `.unsafeFlags(["-Xlinker", "-platform_version", "-Xlinker", "macos", "-Xlinker", "14.0",
+  "-Xlinker", "26.0"])`（minos 保持 14.0，sdk 报 26.0）。验证：`vtool -show-build
+  .build/debug/ushot-mac` 要显示 `sdk 26.0`，对比系统设置是 `26.7`。
+- **设置窗对齐 macOS 26 系统设置的观感。** 窗口 `.fullSizeContentView` + 透明无标题
+  titlebar，SwiftUI 自己画顶栏标题（`ignoresSafeArea(edges: .top)` + 左边距避开红绿灯）和
+  底部动作栏。分节标题 / 说明是卡片内第一行（不是卡外的 `Section` header，也不带 SF
+  Symbol）；热键是普通 SwiftUI `Button`（走系统 26 的按钮 chrome），别退回 AppKit
+  `NSButton`——`.automatic`/`.rounded` 是旧灰条，`.glass` bezel 在卡片里几乎看不见。
 - **标注样式存在标注上，不读全局。** `color` / `stroke` / `filled` 是 `Annotation` 的字段
   （新建时从 `EditorState` 快照）；绘制不要去看 `state.color`。工具栏的面板改的是
   `state.color` / `state.strokeFactor` / `state.rectangleFilled`。文字编辑用

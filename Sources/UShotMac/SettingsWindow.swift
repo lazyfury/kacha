@@ -1,5 +1,6 @@
-// The settings window: a SwiftUI grouped form hosted in an AppKit window. The
-// hotkey recorder stays AppKit and is embedded.
+// The settings window: a SwiftUI view hosted in an AppKit window. The chrome is
+// seamless (full-size content, transparent title-less titlebar) so the SwiftUI
+// content draws the System-Settings-style top bar and footer itself.
 
 import AppKit
 import SwiftUI
@@ -23,13 +24,15 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
             onHotkeyChange: { [weak self] in self?.onHotkeyChange?() }
         )
         let hosting = NSHostingController(rootView: root)
-        // A plain titled window: the native grouped form supplies the window /
-        // card backgrounds and borders; custom chrome would fight them.
         let window = NSWindow(contentViewController: hosting)
         window.title = "设置"
-        window.styleMask = [.titled, .closable]
+        window.styleMask = [.titled, .closable, .fullSizeContentView]
         window.isReleasedWhenClosed = false
         window.delegate = self
+        // Seamless chrome: the SwiftUI content supplies the title and footer.
+        window.titlebarAppearsTransparent = true
+        window.titleVisibility = .hidden
+        window.titlebarSeparatorStyle = .none
         window.setContentSize(hosting.view.fittingSize)
 
         window.center()

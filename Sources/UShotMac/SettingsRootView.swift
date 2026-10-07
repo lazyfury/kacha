@@ -1,8 +1,9 @@
 // The settings window's SwiftUI content.
 //
-// A native grouped Form (the modern macOS Settings look, and it inherits the
-// macOS 26 chrome automatically). The hotkey recorder stays AppKit and is
-// embedded with NSViewRepresentable.
+// Mirrors the macOS 26 System Settings look: a title in the top bar, grouped
+// cards whose section title/description live inside the card, and an action bar
+// pinned to the bottom. The window is a full-size content view, so the header
+// row clears the traffic lights itself.
 
 import AppKit
 import SwiftUI
@@ -18,52 +19,99 @@ struct SettingsRootView: View {
     private var loginAvailable: Bool { LaunchAtLogin.isAvailable }
 
     var body: some View {
-        Form {
-            Section {
-                hotkeyRow("截图", symbol: "camera.viewfinder", hotkey: $captureHotkey) {
-                    Preferences.captureHotkey = $0
+        VStack(spacing: 0) {
+            header
+            Form {
+                Section {
+                    sectionHeader(
+                        "快捷键",
+                        "点右侧的按钮，然后按下新的组合键；按 Esc 取消。"
+                    )
+                    hotkeyRow("截图", hotkey: $captureHotkey) {
+                        Preferences.captureHotkey = $0
+                    }
+                    hotkeyRow("全屏截图", hotkey: $fullScreenHotkey) {
+                        Preferences.fullScreenHotkey = $0
+                    }
+                    hotkeyRow("取色器", hotkey: $pickerHotkey) {
+                        Preferences.pickerHotkey = $0
+                    }
                 }
-                hotkeyRow(
-                    "全屏截图",
-                    symbol: "arrow.up.left.and.arrow.down.right",
-                    hotkey: $fullScreenHotkey
-                ) {
-                    Preferences.fullScreenHotkey = $0
-                }
-                hotkeyRow("取色器", symbol: "eyedropper", hotkey: $pickerHotkey) {
-                    Preferences.pickerHotkey = $0
-                }
-            } header: {
-                Label("快捷键", systemImage: "keyboard")
-            } footer: {
-                Text("点右边的按钮，然后按下新的组合键；按 Esc 取消。")
-            }
 
-            Section {
-                Toggle("开机时启动", isOn: loginBinding)
+                Section {
+                    Toggle(isOn: loginBinding) {
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("开机时启动")
+                                .font(.headline)
+                            Text("从 .app 运行时可设置开机启动。")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
                     .toggleStyle(.switch)
                     .disabled(!loginAvailable)
-                if !loginAvailable {
-                    Text("从 .app 运行时可设置开机启动。")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
                 }
-            } header: {
-                Label("通用", systemImage: "gearshape")
             }
-
-            Section {
-                Button("恢复默认快捷键", action: resetHotkeys)
-            }
+            .formStyle(.grouped)
+            footer
         }
-        .formStyle(.grouped)
+        // The window content spans the titlebar; the header row clears the
+        // traffic lights itself.
+        .ignoresSafeArea(edges: .top)
         .frame(width: 460)
-        .frame(minHeight: 360)
+        .frame(minHeight: 380)
+    }
+
+    // MARK: - Chrome
+
+    /// The window title, sitting to the right of the traffic lights.
+    private var header: some View {
+        HStack {
+            Text("设置")
+                .font(.system(size: 15, weight: .semibold))
+            Spacer(minLength: 0)
+        }
+        .padding(.leading, 82)
+        .padding(.trailing, 20)
+        .padding(.top, 6)
+        .padding(.bottom, 12)
+    }
+
+    /// The bottom action bar: reset the shortcuts, plus a help button.
+    private var footer: some View {
+        HStack(spacing: 10) {
+            Spacer(minLength: 0)
+            Button("恢复默认快捷键", action: resetHotkeys)
+            Button {
+                showHelp()
+            } label: {
+                Image(systemName: "questionmark")
+                    .frame(width: 18, height: 18)
+            }
+            .buttonBorderShape(.circle)
+            .help("帮助")
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 12)
+        .background(.bar)
+    }
+
+    // MARK: - Rows
+
+    /// A card's title + description, rendered as the card's first row.
+    private func sectionHeader(_ title: String, _ description: String) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(title)
+                .font(.headline)
+            Text(description)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func hotkeyRow(
         _ title: String,
-        symbol: String,
         hotkey: Binding<Hotkey>,
         apply: @escaping (Hotkey) -> Void
     ) -> some View {
@@ -73,9 +121,11 @@ struct SettingsRootView: View {
                 onHotkeyChange()
             }
         } label: {
-            Label(title, systemImage: symbol)
+            Text(title)
         }
     }
+
+    // MARK: - Actions
 
     /// Only commit the change (and update the UI) when the system call succeeds.
     private var loginBinding: Binding<Bool> {
@@ -101,36 +151,23 @@ struct SettingsRootView: View {
         onHotkeyChange()
     }
 
+    private func showHelp() {
+        let alert = NSAlert()
+        alert.messageText = "快捷键"
+        alert.informativeText = """
+        截图：框选区域、点击窗口或点击桌面。
+        全屏截图：抓取鼠标所在的整块屏幕。
+        取色器：在冻结的画面上取样颜色。
+        """
+        alert.alertStyle = .informational
+        alert.runModal()
+    }
+
     private func present(_ error: Error) {
         let alert = NSAlert()
         alert.messageText = "无法修改开机启动"
         alert.informativeText = error.localizedDescription
         alert.alertStyle = .warning
         alert.runModal()
-    }
-}
-
-/// Embeds the AppKit recorder; the binding keeps its title in sync.
-private struct HotkeyRecorder: NSViewRepresentable {
-    @Binding var hotkey: Hotkey
-    let onChange: (Hotkey) -> Void
-
-    func makeNSView(context: Context) -> HotkeyRecorderView {
-        let view = HotkeyRecorderView(hotkey: hotkey)
-        view.onChange = { newValue in
-            hotkey = newValue
-            onChange(newValue)
-        }
-        return view
-    }
-
-    func updateNSView(_ nsView: HotkeyRecorderView, context: Context) {
-        if nsView.hotkey != hotkey {
-            nsView.hotkey = hotkey
-        }
-        nsView.onChange = { newValue in
-            hotkey = newValue
-            onChange(newValue)
-        }
     }
 }

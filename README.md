@@ -53,8 +53,8 @@ Sources/UShotMac/
   Annotate.swift          标注数据模型 + SF Symbols
   PinWindows.swift        钉图悬浮窗
   SettingsWindow.swift    设置窗（NSWindow 宿主）
-  SettingsRootView.swift  设置窗 SwiftUI：原生分组表单 + 热键录制 representable
-  HotkeyRecorderView.swift AppKit 热键录制按钮
+  SettingsRootView.swift  设置窗 SwiftUI：系统设置风顶栏 / 分组卡片 / 底部动作栏
+  HotkeyRecorderView.swift SwiftUI 热键录制按钮 + 本地 NSEvent 监听
   PNG.swift               ImageIO PNG 编码
   SelfCheck.swift         `--selfcheck` 纯逻辑断言
 

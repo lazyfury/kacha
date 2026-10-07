@@ -1,45 +1,65 @@
 // A button that records the next key combination when clicked.
+//
+// Kept in SwiftUI (rather than an AppKit NSButton) so it shares the settings
+// form's button chrome and inherits the macOS 26 look. Key capture still uses a
+// local NSEvent monitor while recording.
 
 import AppKit
 import Carbon.HIToolbox
+import SwiftUI
 
-final class HotkeyRecorderView: NSButton {
-    var hotkey: Hotkey {
-        didSet { title = hotkey.display }
+struct HotkeyRecorder: View {
+    @Binding var hotkey: Hotkey
+    let onChange: (Hotkey) -> Void
+
+    @StateObject private var recorder = HotkeyRecorderModel()
+
+    var body: some View {
+        Button {
+            recorder.start { newValue in
+                hotkey = newValue
+                onChange(newValue)
+            }
+        } label: {
+            Text(recorder.isRecording ? "按下快捷键…" : hotkey.display)
+                .font(.body.monospaced())
+                .frame(minWidth: 54)
+        }
+        .onDisappear { recorder.stop() }
+        .help("点按后按下新的组合键")
     }
-    var onChange: ((Hotkey) -> Void)?
+}
+
+/// Owns the local event monitor and turns the next key press into a `Hotkey`.
+private final class HotkeyRecorderModel: ObservableObject {
+    @Published private(set) var isRecording = false
 
     private var monitor: Any?
+    private var commit: ((Hotkey) -> Void)?
 
-    init(hotkey: Hotkey) {
-        self.hotkey = hotkey
-        super.init(frame: NSRect(x: 0, y: 0, width: 140, height: 24))
-        bezelStyle = .rounded
-        target = self
-        action = #selector(startRecording)
-        title = hotkey.display
-    }
-
-    @available(*, unavailable)
-    required init?(coder: NSCoder) { fatalError("HotkeyRecorderView is created programmatically") }
-
-    deinit {
-        stopRecording()
-    }
-
-    @objc private func startRecording() {
+    func start(_ commit: @escaping (Hotkey) -> Void) {
         guard monitor == nil else { return }
-        title = "按下快捷键…"
-        // A local monitor captures the combination; the settings window is key.
+        self.commit = commit
+        isRecording = true
+        // While recording, swallow every key event so it never reaches the app.
         monitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown]) { [weak self] event in
             self?.handle(event)
             return nil
         }
     }
 
+    func stop() {
+        if let monitor {
+            NSEvent.removeMonitor(monitor)
+            self.monitor = nil
+        }
+        commit = nil
+        isRecording = false
+    }
+
     private func handle(_ event: NSEvent) {
         if event.keyCode == UInt16(kVK_Escape) {
-            stopRecording()
+            stop()
             return
         }
         let modifiers = event.modifierFlags.intersection(Hotkey.relevantModifiers)
@@ -52,17 +72,16 @@ final class HotkeyRecorderView: NSButton {
         }
         let characters = event.charactersIgnoringModifiers ?? ""
         let label = characters.isEmpty ? Self.label(for: event.keyCode) : characters
-        hotkey = Hotkey(keyCode: UInt32(event.keyCode), modifiers: modifiers, keyLabel: label)
-        stopRecording()
-        onChange?(hotkey)
+        let hotkey = Hotkey(keyCode: UInt32(event.keyCode), modifiers: modifiers, keyLabel: label)
+        let commit = self.commit
+        stop()
+        commit?(hotkey)
     }
 
-    private func stopRecording() {
+    deinit {
         if let monitor {
             NSEvent.removeMonitor(monitor)
-            self.monitor = nil
         }
-        title = hotkey.display
     }
 
     /// A readable label for keys that do not produce a character.
