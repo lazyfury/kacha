@@ -179,8 +179,8 @@ marker 工具，用 `defaultMarkerStroke`（最小 16px）的粗笔刷。
 - **Liquid Glass 是 macOS 26+**（`glassEffect` / `.buttonStyle(.glass)` /
   `GlassEffectContainer`）。代码一律 `if #available(macOS 26.0, *)`，旧系统回退到 `.bar` /
   `.regularMaterial`，**部署目标保持 14.0**。
-- **编辑窗**：`.fullSizeContentView`，画布铺满整窗（含标题栏区域），工具栏是无标题栏的玻璃
-  浮条**居中**浮在顶部（`ZStack(alignment: .top)`）；因为标题栏没得拖了，浮条最左边加了一个
+- **编辑窗**：`.fullSizeContentView`，顶部一条留给工具栏（`VStack`：工具栏 + 画布，居中），
+  画布只在工具栏下方，图片不会被浮条压住。因为标题栏没得拖了，浮条最左边加了一个
   `WindowDragArea` 拖拽把手（调 `performDrag`）。当前工具用 accent 胶囊标记。窗口
   `contentMinSize = 840×460`；`titlebarAppearsTransparent` + `titleVisibility = .hidden` +
   `titlebarSeparatorStyle = .none`。

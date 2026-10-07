@@ -17,8 +17,7 @@ struct EditorRootView: View {
     let onClose: () -> Void
 
     var body: some View {
-        ZStack(alignment: .top) {
-            CanvasRepresentable(canvas: canvas)
+        VStack(spacing: 0) {
             EditorToolbar(
                 state: state,
                 canvas: canvas,
@@ -28,6 +27,8 @@ struct EditorRootView: View {
                 onClose: onClose
             )
             .padding(.top, 10)
+            .padding(.bottom, 10)
+            CanvasRepresentable(canvas: canvas)
         }
         .frame(minWidth: 840, minHeight: 460)
         .ignoresSafeArea()
