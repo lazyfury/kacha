@@ -12,6 +12,8 @@ import Foundation
 struct LaunchOptions {
     /// Debug: run the pure-logic self-check and exit.
     let selfCheck: Bool
+    /// Debug: open and close the settings window once, then quit.
+    let smokeSettings: Bool
     /// Debug: open and close the editor once, then quit.
     let smokeEditor: Bool
     /// Debug: compose a synthetic capture, copy it to the clipboard, then quit.
@@ -19,6 +21,7 @@ struct LaunchOptions {
 
     static func parse(_ arguments: [String]) -> LaunchOptions {
         var selfCheck = false
+        var smokeSettings = false
         var smokeEditor = false
         var smokeExport = false
         var index = 1
@@ -28,6 +31,9 @@ struct LaunchOptions {
             case "--selfcheck":
                 selfCheck = true
                 index += 1
+            case "--smoke-settings":
+                smokeSettings = true
+                index += 1
             case "--smoke-editor":
                 smokeEditor = true
                 index += 1
@@ -35,7 +41,7 @@ struct LaunchOptions {
                 smokeExport = true
                 index += 1
             case "-h", "--help":
-                let usage = "用法：ushot-mac [--selfcheck] [--smoke-editor] [--smoke-export]\n"
+                let usage = "用法：ushot-mac [--selfcheck] [--smoke-settings] [--smoke-editor] [--smoke-export]\n"
                 FileHandle.standardError.write(Data(usage.utf8))
                 exit(0)
             default:
@@ -44,6 +50,7 @@ struct LaunchOptions {
         }
         return LaunchOptions(
             selfCheck: selfCheck,
+            smokeSettings: smokeSettings,
             smokeEditor: smokeEditor,
             smokeExport: smokeExport
         )

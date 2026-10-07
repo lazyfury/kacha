@@ -75,11 +75,7 @@ final class SelectionView: NSView {
         guard let ctx = NSGraphicsContext.current?.cgContext else { return }
         let viewport = bounds
 
-        if session.pickMode {
-            drawPick(ctx, viewport: viewport)
-        } else {
-            drawUnified(ctx, viewport: viewport)
-        }
+        drawUnified(ctx, viewport: viewport)
     }
 
     /// Unified region overlay: a settled selection wins; otherwise the window
@@ -124,22 +120,6 @@ final class SelectionView: NSView {
             }
         }
         drawLabel(ctx, sizeText(local), near: local, viewport: viewport)
-    }
-
-    private func drawPick(_ ctx: CGContext, viewport: CGRect) {
-        // Dim only once a window is under the cursor: the screen stays bright
-        // until the user has something selected.
-        if let hover = session.hover {
-            let local = Selection.toLocal(hover, origin: display.origin)
-            fillMask(ctx, selection: local, viewport: viewport)
-            if let visible = Selection.intersection(local, viewport) {
-                ctx.setStrokeColor(Self.accent)
-                ctx.setLineWidth(2)
-                ctx.stroke(visible)
-            }
-            drawLabel(ctx, sizeText(local), near: local, viewport: viewport)
-        }
-        drawCrosshair(ctx, viewport: viewport)
     }
 
     private var isNewDrag: Bool {
@@ -194,12 +174,6 @@ final class SelectionView: NSView {
     override func mouseDown(with event: NSEvent) {
         let local = convert(event.locationInWindow, from: nil)
         pointer = local
-        if session.pickMode {
-            if session.hover != nil {
-                controller?.pickHovered()
-            }
-            return
-        }
         let point = global(local)
         anchor = point
         didDrag = false
@@ -212,10 +186,6 @@ final class SelectionView: NSView {
     override func mouseDragged(with event: NSEvent) {
         let local = convert(event.locationInWindow, from: nil)
         pointer = local
-        if session.pickMode {
-            controller?.updateHover(at: NSEvent.mouseLocation)
-            return
-        }
         let point = global(local)
         if !didDrag {
             let dx = point.x - anchor.x
@@ -229,7 +199,6 @@ final class SelectionView: NSView {
     }
 
     override func mouseUp(with event: NSEvent) {
-        if session.pickMode { return }
         let wasNew: Bool
         if case .new = drag { wasNew = true } else { wasNew = false }
         let usable = session.selection.map { Selection.usable($0) } ?? false
@@ -295,17 +264,15 @@ final class OverlayController {
     private(set) var hoveredWindow: SCWindow?
 
     var isOpen: Bool { !panels.isEmpty }
-    var isPicking: Bool { session?.pickMode ?? false }
 
     var onConfirm: ((CaptureSession) -> Void)?
     var onCancel: ((CaptureSession) -> Void)?
     var onPick: ((CaptureSession, SCWindow) -> Void)?
 
     /// Open one panel per display, over `session`'s frozen frames.
-    func show(session: CaptureSession, windows: [SCWindow], pick: Bool) {
+    func show(session: CaptureSession, windows: [SCWindow]) {
         close()
         self.session = session
-        session.pickMode = pick
         self.windowsByID = Dictionary(
             windows.map { ($0.windowID, $0) },
             uniquingKeysWith: { first, _ in first }
@@ -379,13 +346,8 @@ final class OverlayController {
         refresh()
     }
 
-    func pickHovered() {
-        guard let window = hoveredWindow else { return }
-        pick(window)
-    }
-
-    /// A click in unified mode: a window under the cursor is captured, otherwise
-    /// the whole display the click landed on.
+    /// A click: a window under the cursor is captured, otherwise the whole
+    /// display the click landed on.
     func click(at point: CGPoint, display: CapturedDisplay) {
         if let window = windowUnder(point) {
             pick(window)

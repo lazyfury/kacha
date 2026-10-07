@@ -13,10 +13,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let options: LaunchOptions
     private let overlays = OverlayController()
     private let pins = PinWindows()
+    private let settings = SettingsWindow()
     private lazy var editor = EditorWindow(pins: pins)
     private var menuBar: MenuBar?
     private var hotkeys: Hotkeys?
-    private var windowHotkey: Hotkeys?
 
     init(options: LaunchOptions) {
         self.options = options
@@ -27,23 +27,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let menuBar = MenuBar(
             onCapture: { [weak self] in self?.startCapture() },
-            onWindowCapture: { [weak self] in self?.startWindowCapture() },
+            onSettings: { [weak self] in self?.settings.show() },
             onQuit: { NSApp.terminate(nil) }
         )
         menuBar.install()
         self.menuBar = menuBar
 
-        let regionHotkey = Hotkeys(keyCode: Hotkeys.keyA, id: 1) { [weak self] in
-            self?.startCapture()
-        }
-        regionHotkey.register()
-        self.hotkeys = regionHotkey
+        let hotkeys = Hotkeys { [weak self] in self?.startCapture() }
+        self.hotkeys = hotkeys
+        registerHotkey()
 
-        let windowHotkey = Hotkeys(keyCode: Hotkeys.keyW, id: 2) { [weak self] in
-            self?.startWindowCapture()
+        settings.onHotkeyChange = { [weak self] hotkey in
+            self?.registerHotkey()
+            self?.menuBar?.updateCaptureShortcut(hotkey)
         }
-        windowHotkey.register()
-        self.windowHotkey = windowHotkey
 
         overlays.onConfirm = { [weak self] session in
             self?.editor.show(session: session)
@@ -53,6 +50,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.captureWindow(window, session: session)
         }
 
+        if options.smokeSettings {
+            runSettingsSmoke()
+        }
         if options.smokeEditor {
             runEditorSmoke()
         }
@@ -72,33 +72,36 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         pins.closeAll()
     }
 
+    private func registerHotkey() {
+        hotkeys?.register(Preferences.captureHotkey)
+    }
+
     private func installMenu() {
         let mainMenu = NSMenu()
         let appItem = NSMenuItem()
         mainMenu.addItem(appItem)
         let appMenu = NSMenu()
 
-        let capture = NSMenuItem(
-            title: "开始截图",
-            action: #selector(startCapture),
-            keyEquivalent: "a"
-        )
-        capture.keyEquivalentModifierMask = [.command, .shift]
+        let hotkey = Preferences.captureHotkey
+        let capture = NSMenuItem(title: "截图", action: #selector(startCapture), keyEquivalent: "")
+        if hotkey.keyLabel.count == 1,
+            let character = hotkey.keyLabel.first,
+            character.isLetter || character.isNumber
+        {
+            capture.keyEquivalent = String(character).lowercased()
+            capture.keyEquivalentModifierMask = hotkey.modifiers
+        }
         capture.target = self
         appMenu.addItem(capture)
 
-        let windowCapture = NSMenuItem(
-            title: "窗口截图",
-            action: #selector(startWindowCapture),
-            keyEquivalent: "w"
-        )
-        windowCapture.keyEquivalentModifierMask = [.command, .shift]
-        windowCapture.target = self
-        appMenu.addItem(windowCapture)
+        let settings = NSMenuItem(title: "设置…", action: #selector(openSettings), keyEquivalent: ",")
+        settings.keyEquivalentModifierMask = [.command]
+        settings.target = self
+        appMenu.addItem(settings)
 
         appMenu.addItem(.separator())
         appMenu.addItem(
-            withTitle: "Quit ushot",
+            withTitle: "退出 ushot",
             action: #selector(NSApplication.terminate(_:)),
             keyEquivalent: "q"
         )
@@ -106,19 +109,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.mainMenu = mainMenu
     }
 
+    @objc private func openSettings() {
+        settings.show()
+    }
+
     // MARK: - Capture
 
-    /// Freeze every display and raise the overlay panels (region mode).
+    /// Freeze every display and raise the unified overlay (drag a region, click a
+    /// window or the desktop).
     @objc private func startCapture() {
-        startCaptureFlow(pick: false)
-    }
-
-    /// Window-pick mode: the overlay outlines windows; a click captures one.
-    @objc private func startWindowCapture() {
-        startCaptureFlow(pick: true)
-    }
-
-    private func startCaptureFlow(pick: Bool) {
         guard ScreenPermission.request() else {
             presentPermissionAlert()
             return
@@ -130,7 +129,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 for display in result.displays {
                     session.setDisplay(display)
                 }
-                self.overlays.show(session: session, windows: result.windows, pick: pick)
+                self.overlays.show(session: session, windows: result.windows)
             } catch {
                 self.presentCaptureError(error)
             }
@@ -173,6 +172,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     // MARK: - Smoke tests (no screen-recording permission)
+
+    /// Debug (`--smoke-settings`): open and close the settings window.
+    private func runSettingsSmoke() {
+        settings.show()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
+            self?.settings.close()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                NSApp.terminate(nil)
+            }
+        }
+    }
 
     /// Debug (`--smoke-editor`): open the editor on a synthetic image and close
     /// it, exercising the teardown path.

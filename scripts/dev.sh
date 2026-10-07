@@ -12,6 +12,8 @@ echo "== swift build =="
 swift build --package-path macos
 echo "== selfcheck =="
 macos/.build/debug/ushot-mac --selfcheck
+echo "== smoke: settings =="
+macos/.build/debug/ushot-mac --smoke-settings
 echo "== smoke: editor =="
 macos/.build/debug/ushot-mac --smoke-editor
 echo "== smoke: export =="

@@ -22,8 +22,6 @@ final class CaptureSession {
     var composed: ComposedImage?
     /// The window under the cursor (global logical points), for window picking.
     var hover: CGRect?
-    /// Whether the overlay is in window-pick mode.
-    var pickMode = false
 
     func setDisplay(_ display: CapturedDisplay) {
         displays[display.displayID] = display
