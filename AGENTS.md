@@ -77,6 +77,11 @@ macOS 截图工具。**纯 Swift 应用**：AppKit 管窗口 / 原生事件与�
   （新建时从 `EditorState` 快照）；绘制不要去看 `state.color`。工具栏的面板改的是
   `state.color` / `state.strokeFactor` / `state.rectangleFilled`。文字编辑用
   `editingAnnotation` 索引在 `commitText` 里原地替换（清空则删除），别 append 新的。
+- **截图提示音不嵌入音频文件。** 优先加载系统截图那声（`/System/Library/Components/
+  CoreAudio.component/Contents/SharedSupport/SystemSounds/system/Screen Capture.aif`），
+  失败回退 `NSSound(named: "Tink")`（`/System/Library/Sounds`，还能被 `~/Library/Sounds`
+  里的同名文件替换）。那个 CoreAudio 组件路径不是文档化 API，macOS 升级可能挪位置，
+  所以 `??` 回退必须有；`--selfcheck` 会断言回退音效可解析。
 - **CGContext 画文字 `position` 是基线（baseline），不是左上角。** 要按字体度量（ascent /
   lineHeight）换算；当成左上角会让文字标注上移 / size 标签溢出。
 
@@ -108,5 +113,6 @@ scripts/package.sh                   # 组装 dist/ushot.app
 | 框选层 / 取色层 | `Sources/UShotMac/OverlayWindow.swift`、`ColorPicker.swift` |
 | 编辑窗 / 画布 / 标注 | `Sources/UShotMac/EditorWindow.swift`、`EditorCanvasView.swift`、`Annotate.swift` |
 | 钉图 / 设置 / 热键录制 | `PinWindows.swift`、`SettingsWindow.swift`、`HotkeyRecorderView.swift` |
+| 截图提示音（系统音效，无资源文件） | `ShotSound.swift`、`Preferences.swift` |
 | PNG 导出 / 权限 | `PNG.swift`、`Permissions.swift` |
 | 打包 / 脚本 | `packaging/Info.plist`、`scripts/` |

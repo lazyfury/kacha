@@ -15,6 +15,7 @@ struct SettingsRootView: View {
     @State private var pickerHotkey = Preferences.pickerHotkey
     @State private var fullScreenHotkey = Preferences.fullScreenHotkey
     @State private var launchAtLogin = LaunchAtLogin.isEnabled
+    @State private var playSound = Preferences.playSound
 
     private var loginAvailable: Bool { LaunchAtLogin.isAvailable }
 
@@ -36,6 +37,20 @@ struct SettingsRootView: View {
                     hotkeyRow("取色器", hotkey: $pickerHotkey) {
                         Preferences.pickerHotkey = $0
                     }
+                }
+
+                Section {
+                    sectionHeader("截图", "截图完成后播放系统提示音。")
+                    Toggle(isOn: soundBinding) {
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("播放声音")
+                                .font(.headline)
+                            Text("使用系统截图同款提示音，不额外占用安装包体积。")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .toggleStyle(.switch)
                 }
 
                 Section {
@@ -137,6 +152,18 @@ struct SettingsRootView: View {
                 } else {
                     launchAtLogin = newValue
                 }
+            }
+        )
+    }
+
+    /// Persist on change and preview the sound when it is switched on.
+    private var soundBinding: Binding<Bool> {
+        Binding(
+            get: { playSound },
+            set: { newValue in
+                playSound = newValue
+                Preferences.playSound = newValue
+                if newValue { ShotSound.play() }
             }
         )
     }

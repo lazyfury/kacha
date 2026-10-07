@@ -61,6 +61,13 @@ enum Preferences {
         set { setHotkey("fullscreen", newValue) }
     }
 
+    /// Play the system shutter sound when a capture is committed. Defaults to on
+    /// (an unset key must not read as `false`).
+    static var playSound: Bool {
+        get { defaults.object(forKey: "playSound") as? Bool ?? true }
+        set { defaults.set(newValue, forKey: "playSound") }
+    }
+
     private static func hotkey(_ name: String, fallback: Hotkey) -> Hotkey {
         guard
             let code = defaults.object(forKey: "\(name)KeyCode") as? Int,

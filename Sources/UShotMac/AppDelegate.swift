@@ -50,6 +50,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         overlays.onConfirm = { [weak self] session in
+            ShotSound.playIfEnabled()
             self?.editor.show(session: session)
         }
         overlays.onCancel = { _ in }
@@ -220,6 +221,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     session.setDisplay(item)
                 }
                 session.composed = Compose.composed(from: display.image)
+                ShotSound.playIfEnabled()
                 self.editor.show(session: session)
             } catch {
                 self.presentCaptureError(error)
@@ -248,6 +250,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             do {
                 let image = try await Capture.captureWindow(window)
                 session.composed = Compose.composed(from: image)
+                ShotSound.playIfEnabled()
                 self.editor.show(session: session)
             } catch {
                 self.presentCaptureError(error)

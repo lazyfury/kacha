@@ -21,6 +21,7 @@ enum SelfCheck {
         checkColor(check)
         checkAnnotations(check)
         checkSymbols(check)
+        checkSound(check)
 
         print(failures == 0 ? "selfcheck: ok" : "selfcheck: \(failures) failure(s)")
         return failures == 0 ? 0 : 1
@@ -256,6 +257,17 @@ enum SelfCheck {
                 "SF Symbol '\(symbol)' exists"
             )
         }
+    }
+
+    /// The fallback must always resolve; the exact system capture sound is not a
+    /// documented path and may legitimately move between macOS releases, so it is
+    /// only covered by the "a source resolves" check below.
+    private static func checkSound(_ check: (Bool, String) -> Void) {
+        check(
+            NSSound(named: NSSound.Name(ShotSound.fallbackName)) != nil,
+            "fallback sound '\(ShotSound.fallbackName)' exists"
+        )
+        check(ShotSound.sound != nil, "a shutter sound source resolves")
     }
 
     private static func checkColor(_ check: (Bool, String) -> Void) {
