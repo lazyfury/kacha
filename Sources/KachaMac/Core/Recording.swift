@@ -109,20 +109,27 @@ enum RecordingContainer: String, CaseIterable {
     var fileExtension: String { rawValue }
 }
 
-/// Where the audio comes from. For Phase 2 the sources are mutually exclusive,
-/// which keeps one audio track (and lets the microphone be muted live).
+/// Where the audio comes from.
 enum RecordingAudio: String, CaseIterable {
     case none
     case system
     case microphone
+    case systemAndMicrophone
 
     var label: String {
         switch self {
         case .none: return "无"
         case .system: return "系统声音"
         case .microphone: return "麦克风"
+        case .systemAndMicrophone: return "系统 + 麦克风"
         }
     }
+
+    /// Whether the ScreenCaptureKit stream captures the system audio.
+    var capturesSystemAudio: Bool { self == .system || self == .systemAndMicrophone }
+
+    /// Whether a separate microphone capture runs.
+    var capturesMicrophone: Bool { self == .microphone || self == .systemAndMicrophone }
 }
 
 /// A snapshot of the recording options, built from Preferences.

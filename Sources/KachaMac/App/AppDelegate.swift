@@ -290,7 +290,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func beginRecording(_ target: RecordingTarget) {
         guard #available(macOS 15.0, *) else { return }
         let config = Preferences.recordingConfig
-        let micAvailable = config.audio == .microphone && MicRecorder.isSupported
+        let micAvailable = config.audio.capturesMicrophone && MicRecorder.isSupported
         countdownMicMuted = false
         countdown.start(
             seconds: config.countdown,
@@ -322,7 +322,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let videoURL = Export.recordingDestination(container: config.container)
         let micURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("kacha-mic-\(UUID().uuidString).m4a")
-        let mic = config.audio == .microphone ? MicRecorder() : nil
+        let mic = config.audio.capturesMicrophone ? MicRecorder() : nil
         self.micRecorder = mic
         self.micMuted = micMuted
 
@@ -352,6 +352,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     result,
                     video: videoURL,
                     mic: micStarted ? micURL : nil,
+                    audio: config.audio,
                     container: config.container
                 )
             }
@@ -374,6 +375,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         _ result: Result<URL, Error>,
         video: URL,
         mic: URL?,
+        audio: RecordingAudio,
         container: RecordingContainer
     ) {
         recordingBar.onStop = nil
@@ -397,11 +399,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             if case RecordingError.cancelled = error { return }
             presentCaptureError(error)
         case .success(let videoURL):
-            finalizeRecording(video: videoURL, mic: mic, container: container)
+            finalizeRecording(video: videoURL, mic: mic, audio: audio, container: container)
         }
     }
 
-    private func finalizeRecording(video: URL, mic: URL?, container: RecordingContainer) {
+    private func finalizeRecording(
+        video: URL,
+        mic: URL?,
+        audio: RecordingAudio,
+        container: RecordingContainer
+    ) {
         let micRecorder = self.micRecorder
         self.micRecorder = nil
         guard mic != nil, let micRecorder else {
@@ -414,18 +421,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     self.placeRecording(video)
                     return
                 }
+                let offset = CMTimeSubtract(micFirst, self.recordingStartedAt)
+                // With system audio as well, mix the two into one track first.
+                var audioURL = micURL
+                var audioOffset = offset
+                if audio == .systemAndMicrophone {
+                    let mixed = FileManager.default.temporaryDirectory
+                        .appendingPathComponent("kacha-mix-\(UUID().uuidString).m4a")
+                    if let mixedURL = await AudioMixer.mix(
+                        systemAudio: video,
+                        microphone: micURL,
+                        offset: offset,
+                        output: mixed
+                    ) {
+                        audioURL = mixedURL
+                        audioOffset = .zero
+                    }
+                }
                 let output = FileManager.default.temporaryDirectory
                     .appendingPathComponent(
                         "kacha-mux-\(UUID().uuidString).\(container.fileExtension)"
                     )
-                let offset = CMTimeSubtract(micFirst, self.recordingStartedAt)
                 let muxed = await RecordingMuxer.mux(
                     video: video,
-                    microphone: micURL,
-                    offset: offset,
+                    microphone: audioURL,
+                    offset: audioOffset,
                     output: output,
                     container: container
                 )
+                if audioURL != micURL { try? FileManager.default.removeItem(at: audioURL) }
                 try? FileManager.default.removeItem(at: micURL)
                 if let muxed {
                     try? FileManager.default.removeItem(at: video)

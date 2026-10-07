@@ -116,7 +116,7 @@ final class ScreenRecorder: NSObject {
         config.queueDepth = 6
         config.showsCursor = options.showCursor
         config.showMouseClicks = options.showClicks
-        config.capturesAudio = options.audio == .system
+        config.capturesAudio = options.audio.capturesSystemAudio
         config.excludesCurrentProcessAudio = true
 
         let filter: SCContentFilter

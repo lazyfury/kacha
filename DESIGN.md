@@ -122,7 +122,8 @@ kacha/
 │       ├── Barcode.swift         # Vision 二维码 / 条码解码
 │       ├── ScreenRecorder.swift  # SCStream + SCRecordingOutput 录屏后端（15+）
 │       ├── MicRecorder.swift     # 独立麦克风采集（AVCaptureSession → m4a）
-│       ├── RecordingMuxer.swift  # 视频 + 麦克风合流（AVMutableComposition）
+│       ├── RecordingMuxer.swift  # 视频 + 音频合流（AVMutableComposition）
+│       ├── AudioMixer.swift      # 系统声 + 麦克风混成一条音轨
 │       ├── ShotSound.swift       # 系统截图提示音
 │       └── SelfCheck.swift       # --selfcheck 纯逻辑断言
 ├── packaging/Info.plist          # LSUIElement=true、LSMinimumSystemVersion=14.0
@@ -309,6 +310,9 @@ Core Image 的 `CIQRCodeGenerator` 生成一个 QR 再解码断言（`--smoke-ba
   且 `Info.plist` 有 `NSMicrophoneUsageDescription`，裸二进制不启用（否则请求权限会崩）。
   设置窗「录制」页显示麦克风权限状态（`MicrophonePermission`：已允许 / 已拒绝 / 未授权 /
   不可用），可一键请求权限或打开系统设置。
+- **系统声 + 麦克风**：音频来源可选「系统 + 麦克风」。SCStream 录视频 + 系统声，麦克风
+  仍独立采集（保住实时静音）；停止后 `AudioMixer` 用 `AVAssetReaderAudioMixOutput` 把两条
+  音轨混成一条 AAC，再 `RecordingMuxer` 与视频合流，避免多音轨播放器只播一条。
 - **单会话**：确认录制目标后 `recordingActive` 置位，直到录制结束；期间菜单栏录屏项禁用
   （标题改「正在录制…」），再按热键 / 菜单直接返回。状态栏图标**不变**——系统已自带录制指示，
   再换图标只会多一个重复的“stop”。

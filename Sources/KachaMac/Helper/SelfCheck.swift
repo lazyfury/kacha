@@ -418,8 +418,8 @@ enum SelfCheck {
         )
         check(RecordingContainer.mp4.fileExtension == "mp4", "container maps to a file extension")
         check(
-            RecordingAudio.allCases == [.none, .system, .microphone],
-            "audio sources are none / system / microphone"
+            RecordingAudio.allCases == [.none, .system, .microphone, .systemAndMicrophone],
+            "audio sources are none / system / microphone / both"
         )
         check(RecordingFrameRate.allCases.map(\.rawValue) == [30, 60], "frame rates are 30 / 60")
     }

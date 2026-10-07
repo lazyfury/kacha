@@ -116,7 +116,11 @@ enum Preferences {
     /// The recording options, persisted as raw values.
     static var recordingConfig: RecordingConfig {
         get {
-            RecordingConfig(
+            // Default to system + microphone when the app can use the mic;
+            // otherwise there is nothing to capture.
+            let defaultAudio: RecordingAudio =
+                MicrophonePermission.status == .unavailable ? .none : .systemAndMicrophone
+            return RecordingConfig(
                 frameRate: RecordingFrameRate(
                     rawValue: defaults.object(forKey: "recordFPS") as? Int ?? 30
                 ) ?? .fps30,
@@ -126,7 +130,7 @@ enum Preferences {
                     rawValue: defaults.string(forKey: "recordContainer") ?? ""
                 ) ?? .mp4,
                 audio: RecordingAudio(rawValue: defaults.string(forKey: "recordAudio") ?? "")
-                    ?? .none,
+                    ?? defaultAudio,
                 showCursor: defaults.object(forKey: "recordShowCursor") as? Bool ?? true,
                 showClicks: defaults.object(forKey: "recordShowClicks") as? Bool ?? false,
                 countdown: defaults.object(forKey: "recordCountdown") as? Int ?? 0

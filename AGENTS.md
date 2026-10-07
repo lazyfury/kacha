@@ -136,7 +136,7 @@ SwiftPM 递归编译子目录，**加文件夹不用改 `Package.swift`**。
 | 编辑窗 / 画布 / 标注 | `Sources/KachaMac/UI/AppKit/EditorWindow.swift`、`EditorCanvasView.swift`、`AnnotationRenderer.swift`、`Core/Annotate.swift`、`EditorState.swift` |
 | 画布几何 / 马赛克 | `Sources/KachaMac/Core/EditorGeometry.swift`、`Mosaic.swift` |
 | 录屏目标 / 几何 / 计时（纯逻辑） | `Sources/KachaMac/Core/Recording.swift` |
-| 录屏后端（SCRecordingOutput，15+） | `Sources/KachaMac/Helper/ScreenRecorder.swift`、`MicRecorder.swift`、`RecordingMuxer.swift` |
+| 录屏后端（SCRecordingOutput，15+） | `Sources/KachaMac/Helper/ScreenRecorder.swift`、`MicRecorder.swift`、`RecordingMuxer.swift`、`AudioMixer.swift` |
 | 录屏控制栏 | `Sources/KachaMac/UI/AppKit/RecordingBar.swift`、`UI/SwiftUI/RecordingBarView.swift` |
 | 钉图 / 设置 / 热键录制 | `Sources/KachaMac/UI/AppKit/PinWindows.swift`、`UI/SwiftUI/SettingsWindow.swift`、`HotkeyRecorderView.swift` |
 | 截图提示音（系统音效，无资源文件） | `Sources/KachaMac/Helper/ShotSound.swift` |
