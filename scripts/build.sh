@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # Build the pure-Swift executable.
 #
-#   macos/scripts/build.sh              # debug
-#   macos/scripts/build.sh --release    # release
+#   scripts/build.sh              # debug
+#   scripts/build.sh --release    # release
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 export MACOSX_DEPLOYMENT_TARGET="${MACOSX_DEPLOYMENT_TARGET:-14.0}"
 
 PROFILE="debug"
@@ -25,8 +25,8 @@ done
 
 cd "$ROOT"
 if [ "${#CONFIG[@]}" -gt 0 ]; then
-    swift build --package-path macos "${CONFIG[@]}"
+    swift build "${CONFIG[@]}"
 else
-    swift build --package-path macos
+    swift build
 fi
-echo "built: $ROOT/macos/.build/$PROFILE/ushot-mac"
+echo "built: $ROOT/.build/$PROFILE/ushot-mac"

@@ -1,16 +1,15 @@
-# Build output.
-/build/
+# SwiftPM build output.
+/.build/
+/.swiftpm/
+
+# Packaged app.
 /dist/
+
+# Editors / tooling.
 /.vscode/
+/.idea/
 
-# Swift/macOS client (SwiftPM).
-/macos/.build/
-/macos/.swiftpm/
-
-# macOS
+# macOS.
 .DS_Store
 ._*
-
-# Editors
-.idea/
 *.swp

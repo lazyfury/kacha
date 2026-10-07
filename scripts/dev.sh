@@ -9,13 +9,13 @@ export MACOSX_DEPLOYMENT_TARGET="${MACOSX_DEPLOYMENT_TARGET:-14.0}"
 
 cd "$ROOT"
 echo "== swift build =="
-swift build --package-path macos
+swift build
 echo "== selfcheck =="
-macos/.build/debug/ushot-mac --selfcheck
+.build/debug/ushot-mac --selfcheck
 echo "== smoke: settings =="
-macos/.build/debug/ushot-mac --smoke-settings
+.build/debug/ushot-mac --smoke-settings
 echo "== smoke: editor =="
-macos/.build/debug/ushot-mac --smoke-editor
+.build/debug/ushot-mac --smoke-editor
 echo "== smoke: export =="
-macos/.build/debug/ushot-mac --smoke-export
+.build/debug/ushot-mac --smoke-export
 echo "OK"

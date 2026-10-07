@@ -2,7 +2,7 @@
 //
 // Pure-Swift ushot: AppKit windows + Core Graphics rendering + ScreenCaptureKit.
 // The whole app (windows, events, capture, UI, image work) is Swift; there is no
-// Rust static library and no C ABI on this branch.
+// Rust static library and no C ABI.
 
 import PackageDescription
 

@@ -2,8 +2,8 @@
 #
 # Packages the pure-Swift app as a `.app`.
 #
-#     macos/scripts/package.sh          # release build, then assemble dist/
-#     macos/scripts/package.sh --open   # ... and launch it afterwards
+#     scripts/package.sh          # release build, then assemble dist/
+#     scripts/package.sh --open   # ... and launch it afterwards
 #
 # The whole app is Swift, so the bundle is self-contained:
 #   Contents/MacOS/ushot-mac   the app
@@ -17,10 +17,10 @@ set -euo pipefail
 APP_NAME="ushot"
 BINARY="ushot-mac"
 
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DIST="$ROOT/dist"
 APP="$DIST/$APP_NAME.app"
-PLIST="$ROOT/macos/packaging/Info.plist"
+PLIST="$ROOT/packaging/Info.plist"
 
 export MACOSX_DEPLOYMENT_TARGET="${MACOSX_DEPLOYMENT_TARGET:-14.0}"
 
@@ -38,9 +38,9 @@ if [ "$(uname -s)" != "Darwin" ]; then
 fi
 
 echo "==> swift build -c release"
-swift build --package-path "$ROOT/macos" -c release
+swift build --package-path "$ROOT" -c release
 
-BUILT_SWIFT="$ROOT/macos/.build/release/$BINARY"
+BUILT_SWIFT="$ROOT/.build/release/$BINARY"
 if [ ! -f "$BUILT_SWIFT" ]; then
 	echo "找不到 $BUILT_SWIFT（先跑 swift build -c release）" >&2
 	exit 1

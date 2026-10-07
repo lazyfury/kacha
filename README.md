@@ -1,82 +1,80 @@
 # ushot
 
-macOS 截图工具。**菜单栏常驻，无常驻主窗**；界面完全用 [`igui`](../igui) 的 UI 栈绘制
-（`igui_core` / `igui_scene` / `igui_ui` / `igui_theme` / `igui_components` +
-`igui_backend_wgpu`），壳是 Swift（AppKit + `CAMetalLayer` + 原生事件 + ScreenCaptureKit），
-参考 [`classic-game-box`](../classic-game-box) 的 Swift 壳方案。完整设计见 [`DESIGN.md`](DESIGN.md)。
+macOS 截图工具。**纯 Swift**：AppKit 管窗口、Core Graphics 画界面、ScreenCaptureKit 抓屏。
+菜单栏常驻（`.accessory` + `LSUIElement`），无常驻主窗，窗口只在需要时打开。
+
+没有 Rust、没有 C ABI、没有第三方 UI 依赖。`Package.swift` 在仓库根目录，Xcode 直接打开
+本目录即可当作项目构建 / 运行。
 
 ## 功能
 
-- **区域截图**（⌘⇧A）：冻结所有显示器 → 每屏一个无边框覆盖层，拖拽/手柄调整选区，
-  十字线 + 尺寸读数，方向键微调；Enter 确认，Esc 取消。**开始时不压暗**，矩形画好后才在
-  选区外出现暗色蒙版。
-- **窗口截图**（⌘⇧W）：AppKit 命中测试确定鼠标下的窗口（考虑真实 z-order / 遮挡），
-  悬停到窗口才压暗并高亮那一个；点击后用 ScreenCaptureKit 的
-  `desktopIndependentWindow` 抓**该窗口自身的内容**（被遮挡也正确）。
+- **截图**（默认 `⌘⇧A`）：冻结所有显示器 → 每屏一个无边框覆盖层。
+  - 拖拽 / 手柄圈选区域，十字线 + 尺寸读数；`Enter` 确认，`Esc` 取消。
+  - 直接**点选窗口**（AppKit 命中测试，考虑真实 z-order / 遮挡），点桌面则抓整屏。
+- **取色器**（默认 `⌘⇧C`）：在冻帧上取样，放大镜 + hex 读数；点击或 `Enter` 复制 hex，
+  `Esc` 取消。
 - **编辑窗**：矩形 / 箭头 / 画笔 / 高亮 / 文字（支持 IME）/ 马赛克 + 撤销重做；
-  复制到剪贴板、保存 PNG、钉到桌面（悬浮窗）。
-- 截图与导出都是原生像素（Retina 2x），区域与窗口一致清晰。
+  复制到剪贴板、保存 PNG、钉到桌面（始终置顶悬浮窗）。
+- **设置**：自定义截图 / 取色两个全局热键、开机自启。
+- 截图与导出都是**原生像素**（Retina 2x）。
 
 ## 架构
 
-```
-AppKit / ScreenCaptureKit (Swift, macos/)          Rust staticlib (libushot_app.a)
-────────────────────────────────────────           ────────────────────────────────
-NSStatusItem / Carbon 全局热键（⌘⇧A / ⌘⇧W） ──┐     igui_app 运行时 + 视图
-覆盖层 / 编辑窗 / 钉图窗口 + CAMetalLayer      ├ c ABI ┤ wgpu 后端 + Presenter
-ScreenCaptureKit 抓屏 / 单窗口捕获             │     capture / compose / annotate / export
-NSPasteboard / NSSavePanel / 权限引导          ─┘     session（冻帧 / 选区 / 合成 / 动作）
-```
+```text
+Sources/UShotMac/
+  main.swift              NSApplication + .accessory + 启动参数
+  AppDelegate.swift       生命周期、菜单、热键、截图/取色入口、smoke 自检
+  MenuBar.swift           NSStatusItem + 菜单
+  Hotkeys.swift           Carbon RegisterEventHotKey（无需辅助功能权限）
+  Preferences.swift       热键 / 开机自启（UserDefaults）
+  LaunchAtLogin.swift     SMAppService
+  Permissions.swift       屏幕录制 TCC 引导
 
-- Swift 只拥有**窗口、`CAMetalLayer`、原生事件与系统能力**；UI、渲染与全部图像处理在 Rust。
-- Rust 产出 `libushot_app.a`（`crate-type = ["lib", "staticlib"]`），SwiftPM 静态链接。
-- 唯一契约是 [`include/ushot_host.h`](include/ushot_host.h)（`ushot_host_*` C ABI）。
-- 窗口只在需要时开（覆盖层 / 编辑窗 / 钉图），所以不会有常驻窗挡住要截的目标。
+  Capture.swift           ScreenCaptureKit：冻帧 / 单窗口捕获
+  Session.swift           一次截图会话的共享状态（冻帧、选区、合成图、悬停窗口）
+  OverlayWindow.swift     每屏一个无边框 NSPanel：冻帧背景 + 选区 / 窗口高亮 / 取色
+  Selection.swift         选区拖拽几何（纯逻辑，可单测）
+  Compose.swift           选区 → 原生像素 RGBA
+  ColorPicker.swift       取色器放大镜 + hex
+
+  EditorWindow.swift      编辑窗（普通带标题栏窗口 + 工具栏）
+  EditorCanvasView.swift  画布：合成图 + 标注绘制 + 图像/视图坐标映射
+  Annotate.swift          标注数据模型
+  PinWindows.swift        钉图悬浮窗
+  SettingsWindow.swift    设置窗
+  HotkeyRecorderView.swift 热键录制按钮
+  PNG.swift               ImageIO PNG 编码
+  SelfCheck.swift         `--selfcheck` 纯逻辑断言
+
+packaging/Info.plist      LSUIElement=true、LSMinimumSystemVersion=14.0
+scripts/{build,run,package}.sh
+```
 
 ## 构建 / 运行
 
 ```bash
-macos/scripts/build.sh              # Rust staticlib + Swift 可执行
-macos/scripts/run.sh                # 构建并运行（菜单栏，无窗口）
-USHOT_RUST_PROFILE=release macos/scripts/build.sh
+scripts/build.sh                 # swift build
+scripts/run.sh                   # 构建并运行（菜单栏，无窗口）
+scripts/run.sh --smoke-editor    # 开/关编辑窗，走 AppKit 真实关闭路径
+scripts/run.sh --smoke-export    # 注入合成图 → 编辑 → 复制到剪贴板
+scripts/package.sh [--open]      # 组装并 ad-hoc 签名 dist/ushot.app
+
+./scripts/dev.sh                 # build + selfcheck + settings/editor/export smoke
 ```
+
+也可以直接用 **Xcode** 打开仓库根目录（`Package.swift` 即项目），选 `ushot-mac` scheme 运行。
 
 首次截图需在「系统设置 › 隐私与安全性 › 屏幕录制」里授予权限并重启。
 
-`igui` 目前用**本地 checkout**（`../igui`，tag `v0.3.1`）。要锁定发布版，把 `Cargo.toml`
-里的 path 换成 classic-game-box 用的 git 依赖即可。
+## 自检
 
-## 自检（无需屏幕录制权限）
-
-```bash
-./scripts/dev.sh                    # fmt --check + clippy -D warnings + test + cargo build + swift build
-macos/scripts/run.sh --smoke-editor # 开/关编辑窗，走 AppKit 真实关闭路径
-macos/scripts/run.sh --smoke-export # 注入合成图 → 编辑 → 复制到剪贴板
-```
-
-**不写截图 / 录屏测试**（igui / cgb 的硬规则）：渲染用 `igui_backend_recording` 录 `DrawList`
-+ `igui_profile::inspect` + 断言命令序列；图像处理（裁剪合成、马赛克取样、PNG、坐标换算）
-用纯函数单测；导出用离屏 `WgpuBackend` 渲染后读回像素验证。
-
-## 目录
-
-```
-src/
-  native/        surface / GPU 插件 / 输入 / ushot_host_* C ABI
-  session.rs     会话：冻帧、选区、合成图、动作、悬停窗口
-  capture.rs     冻帧值类型     compose.rs  选区 → RGBA（跨屏拼接）
-  annotate/      标注模型       export/png   PNG 编解码
-  ui/            overlay（框选层）/ selection（几何）/ editor / canvas / image
-macos/
-  Package.swift  ShotNative（C module）+ ShotMac（可执行）
-  Sources/UShotMac/  Capture / OverlayWindows / EditorWindow / PinWindows /
-                     MenuBar / Hotkeys / HostView / Permissions / AppDelegate
-  packaging/Info.plist（LSUIElement）   scripts/{build,run,package}.sh
-```
+- `--selfcheck`：纯逻辑断言（坐标、裁剪、PNG、标注栅格化），无窗口、无屏幕录制权限、无 XCTest。
+- `--smoke-settings` / `--smoke-editor` / `--smoke-export`：真实开 / 关窗口路径。
+- **不写截图 / 录屏测试**：渲染与捕获用自检 + 纯函数单测覆盖。
 
 ## 已知缺口
 
-- 无颜色 / 线宽选择（固定红 2px；文字固定 18px）；马赛克块固定 12px。
+- 标注颜色 / 线宽固定（红 2px），文字固定 18px（按图片对角线缩放）；马赛克块由线宽派生。
 - 文字提交后不能二次编辑（可撤销）。
 - 窗口拾取不做 app 级分组 / 子窗口选择。
 - 序号 / 延时 / OCR / 滚屏长图未做。

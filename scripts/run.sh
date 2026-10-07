@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # Build (if needed) and run the app.
 #
-#   macos/scripts/run.sh
-#   macos/scripts/run.sh --smoke-editor
-#   macos/scripts/run.sh --release
+#   scripts/run.sh
+#   scripts/run.sh --smoke-editor
+#   scripts/run.sh --release
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 PROFILE="debug"
 ARGS=()
@@ -22,9 +22,9 @@ for arg in "$@"; do
 done
 
 if [ "$PROFILE" = "release" ]; then
-    "$ROOT/macos/scripts/build.sh" --release
+    "$ROOT/scripts/build.sh" --release
 else
-    "$ROOT/macos/scripts/build.sh"
+    "$ROOT/scripts/build.sh"
 fi
 
-exec "$ROOT/macos/.build/$PROFILE/ushot-mac" ${ARGS[@]+"${ARGS[@]}"}
+exec "$ROOT/.build/$PROFILE/ushot-mac" ${ARGS[@]+"${ARGS[@]}"}
