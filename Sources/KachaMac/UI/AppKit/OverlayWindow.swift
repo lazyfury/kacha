@@ -1,9 +1,12 @@
 // The freeze-frame overlay: one borderless panel per display.
 //
 // The frozen frame is the panel's backing layer contents (a static blit); a
-// transparent selection view on top draws the dim mask, selection, handles,
-// crosshair and size label, and owns the mouse/keyboard. No per-frame loop: a
-// redraw happens only when the selection changes.
+// transparent surface view on top draws the dim mask / selection / handles /
+// crosshair / magnifier and owns the mouse/keyboard. There is no per-frame loop:
+// a redraw happens only when the selection or pointer changes.
+//
+// The capture flow and the colour picker are separate subclasses of a small
+// shared `OverlaySurfaceView`, so each mode carries only its own interaction.
 
 import AppKit
 import CoreGraphics
@@ -15,29 +18,15 @@ private final class OverlayPanel: NSPanel {
     override var canBecomeMain: Bool { true }
 }
 
-/// The transparent selection layer drawn over one display's frozen frame.
-final class SelectionView: NSView {
-    private let display: CapturedDisplay
-    private let session: CaptureSession
+/// Shared behaviour of an overlay surface: pointer tracking, coordinate
+/// conversion, the crosshair and the colour lookup under the cursor.
+class OverlaySurfaceView: NSView {
+    let display: CapturedDisplay
+    let session: CaptureSession
     weak var controller: OverlayController?
 
-    private var drag: Selection.Drag = .none
-    private var pointer: CGPoint?
-    /// The pointer-down point (global logical), for click-vs-drag.
-    private var anchor: CGPoint = .zero
-    /// Set once the pointer moved past `clickSlop` since mouse-down.
-    private var didDrag = false
-    /// Whether a settled selection existed when the current press started — a
-    /// click outside it just clears it instead of capturing.
-    private var hadSelection = false
-
-    /// A pointer that moved less than this (logical points) is a click, not a
-    /// drag — the click-vs-region discrimination.
-    private static let clickSlop: CGFloat = 4
-
-    private static let dim = NSColor(calibratedWhite: 0, alpha: 0.45).cgColor
-    private static let accent = NSColor(calibratedRed: 0.16, green: 0.55, blue: 1, alpha: 1).cgColor
-    private static let crosshair = NSColor(calibratedWhite: 1, alpha: 0.55).cgColor
+    /// The pointer in this view's local (top-left) coordinates, if inside.
+    var pointer: CGPoint?
 
     init(display: CapturedDisplay, session: CaptureSession, controller: OverlayController) {
         self.display = display
@@ -47,7 +36,7 @@ final class SelectionView: NSView {
     }
 
     @available(*, unavailable)
-    required init?(coder: NSCoder) { fatalError("SelectionView is created programmatically") }
+    required init?(coder: NSCoder) { fatalError("OverlaySurfaceView is created programmatically") }
 
     override var isFlipped: Bool { true }
     override var acceptsFirstResponder: Bool { true }
@@ -68,45 +57,59 @@ final class SelectionView: NSView {
     }
 
     /// Local (top-left) point → global logical point.
-    private func global(_ local: CGPoint) -> CGPoint {
+    func global(_ local: CGPoint) -> CGPoint {
         CGPoint(x: local.x + display.origin.x, y: local.y + display.origin.y)
     }
+
+    /// The colour of the frozen frame under a local point, if in bounds.
+    func color(at local: CGPoint) -> NSColor? {
+        ColorPicker.pixel(
+            display.image,
+            x: Int(local.x * display.scale),
+            y: Int(local.y * display.scale)
+        )
+    }
+
+    func drawCrosshair(_ ctx: CGContext, viewport: CGRect) {
+        guard let p = pointer else { return }
+        ctx.setFillColor(Self.crosshair)
+        ctx.fill(CGRect(x: p.x, y: 0, width: 1, height: viewport.height))
+        ctx.fill(CGRect(x: 0, y: p.y, width: viewport.width, height: 1))
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        pointer = nil
+        needsDisplay = true
+    }
+
+    private static let crosshair = NSColor(calibratedWhite: 1, alpha: 0.55).cgColor
+}
+
+/// Region / window / full-screen picking: a settled selection wins; otherwise
+/// the window under the cursor is highlighted, and a click captures it (a click
+/// on the desktop captures the whole display).
+final class CaptureSelectionView: OverlaySurfaceView {
+    private var drag: Selection.Drag = .none
+    /// The pointer-down point (global logical), for click-vs-drag.
+    private var anchor: CGPoint = .zero
+    /// Set once the pointer moved past `clickSlop` since mouse-down.
+    private var didDrag = false
+    /// Whether a settled selection existed when the current press started — a
+    /// click outside it just clears it instead of capturing.
+    private var hadSelection = false
+
+    /// A pointer that moved less than this (logical points) is a click, not a
+    /// drag — the click-vs-region discrimination.
+    private static let clickSlop: CGFloat = 4
+
+    private static let dim = NSColor(calibratedWhite: 0, alpha: 0.45).cgColor
+    private static let accent = NSColor(calibratedRed: 0.16, green: 0.55, blue: 1, alpha: 1).cgColor
 
     // MARK: - Drawing
 
     override func draw(_ dirtyRect: NSRect) {
         guard let ctx = NSGraphicsContext.current?.cgContext else { return }
         let viewport = bounds
-
-        if session.mode == .colorPicker {
-            drawColorPicker(ctx, viewport: viewport)
-        } else {
-            drawUnified(ctx, viewport: viewport)
-        }
-    }
-
-    /// The colour-picker overlay: crosshair + magnifier + hex readout.
-    private func drawColorPicker(_ ctx: CGContext, viewport: CGRect) {
-        guard let p = pointer else { return }
-        let imageX = Int(p.x * display.scale)
-        let imageY = Int(p.y * display.scale)
-        drawCrosshair(ctx, viewport: viewport)
-        guard let color = ColorPicker.pixel(display.image, x: imageX, y: imageY) else { return }
-        ColorPicker.drawMagnifier(
-            ctx,
-            image: display.image,
-            at: p,
-            imageX: imageX,
-            imageY: imageY,
-            color: color,
-            viewport: viewport
-        )
-    }
-
-    /// Unified region overlay: a settled selection wins; otherwise the window
-    /// under the cursor is highlighted, and a click captures it (a click on the
-    /// desktop captures the whole display).
-    private func drawUnified(_ ctx: CGContext, viewport: CGRect) {
         let local = session.selection.map { Selection.toLocal($0, origin: display.origin) }
         let settled = local != nil && !isNewDrag
 
@@ -159,13 +162,6 @@ final class SelectionView: NSView {
         where rect.width > 0 && rect.height > 0 {
             ctx.fill(rect)
         }
-    }
-
-    private func drawCrosshair(_ ctx: CGContext, viewport: CGRect) {
-        guard let p = pointer else { return }
-        ctx.setFillColor(Self.crosshair)
-        ctx.fill(CGRect(x: p.x, y: 0, width: 1, height: viewport.height))
-        ctx.fill(CGRect(x: 0, y: p.y, width: viewport.width, height: 1))
     }
 
     /// The bottom-centre instruction pill. The text reflects the current step so
@@ -237,17 +233,6 @@ final class SelectionView: NSView {
     override func mouseDown(with event: NSEvent) {
         let local = convert(event.locationInWindow, from: nil)
         pointer = local
-        if session.mode == .colorPicker {
-            let color = ColorPicker.pixel(
-                display.image,
-                x: Int(local.x * display.scale),
-                y: Int(local.y * display.scale)
-            )
-            if let color {
-                controller?.finishColorPick(color)
-            }
-            return
-        }
         let point = global(local)
         anchor = point
         didDrag = false
@@ -261,10 +246,6 @@ final class SelectionView: NSView {
     override func mouseDragged(with event: NSEvent) {
         let local = convert(event.locationInWindow, from: nil)
         pointer = local
-        if session.mode == .colorPicker {
-            needsDisplay = true
-            return
-        }
         let point = global(local)
         if !didDrag {
             let dx = point.x - anchor.x
@@ -278,7 +259,6 @@ final class SelectionView: NSView {
     }
 
     override func mouseUp(with event: NSEvent) {
-        if session.mode == .colorPicker { return }
         let wasNew: Bool
         if case .new = drag { wasNew = true } else { wasNew = false }
         let usable = session.selection.map { Selection.usable($0) } ?? false
@@ -308,23 +288,12 @@ final class SelectionView: NSView {
 
     override func mouseMoved(with event: NSEvent) {
         pointer = convert(event.locationInWindow, from: nil)
-        if session.mode == .capture {
-            controller?.updateHover(at: NSEvent.mouseLocation)
-        }
-        needsDisplay = true
-    }
-
-    override func mouseExited(with event: NSEvent) {
-        pointer = nil
+        controller?.updateHover(at: NSEvent.mouseLocation)
         needsDisplay = true
     }
 
     override func rightMouseDown(with event: NSEvent) {
-        if session.mode == .capture {
-            back()
-        } else {
-            super.rightMouseDown(with: event)
-        }
+        back()
     }
 
     /// Back one step: drop a settled selection and return to window / full-screen
@@ -343,26 +312,6 @@ final class SelectionView: NSView {
     // MARK: - Keyboard
 
     override func keyDown(with event: NSEvent) {
-        if session.mode == .colorPicker {
-            switch event.keyCode {
-            case 53:  // Escape
-                controller?.cancel()
-            case 36, 76:  // Return / keypad Enter: pick at the cursor
-                if let p = pointer {
-                    let color = ColorPicker.pixel(
-                        display.image,
-                        x: Int(p.x * display.scale),
-                        y: Int(p.y * display.scale)
-                    )
-                    if let color {
-                        controller?.finishColorPick(color)
-                    }
-                }
-            default:
-                break
-            }
-            return
-        }
         switch event.keyCode {
         case 53:  // Escape
             back()
@@ -386,10 +335,65 @@ final class SelectionView: NSView {
     }
 }
 
+/// The colour-picker overlay: crosshair + magnifier + hex readout. A click or
+/// Return copies the sampled colour's hex and closes.
+final class ColorPickView: OverlaySurfaceView {
+    override func draw(_ dirtyRect: NSRect) {
+        guard let ctx = NSGraphicsContext.current?.cgContext else { return }
+        drawCrosshair(ctx, viewport: bounds)
+        guard let p = pointer, let color = color(at: p) else { return }
+        ColorPicker.drawMagnifier(
+            ctx,
+            image: display.image,
+            at: p,
+            imageX: Int(p.x * display.scale),
+            imageY: Int(p.y * display.scale),
+            color: color,
+            viewport: bounds
+        )
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        let local = convert(event.locationInWindow, from: nil)
+        pointer = local
+        if let color = color(at: local) {
+            controller?.finishColorPick(color)
+        }
+    }
+
+    override func mouseDragged(with event: NSEvent) {
+        pointer = convert(event.locationInWindow, from: nil)
+        needsDisplay = true
+    }
+
+    override func mouseMoved(with event: NSEvent) {
+        pointer = convert(event.locationInWindow, from: nil)
+        needsDisplay = true
+    }
+
+    override func keyDown(with event: NSEvent) {
+        switch event.keyCode {
+        case 53:  // Escape
+            controller?.cancel()
+        case 36, 76:  // Return / keypad Enter: pick at the cursor
+            if let p = pointer, let color = color(at: p) {
+                controller?.finishColorPick(color)
+            }
+        default:
+            super.keyDown(with: event)
+        }
+    }
+}
+
 /// Owns the overlay panels and the shared session for one capture.
+@MainActor
 final class OverlayController {
-    private var panels: [(window: NSWindow, view: SelectionView)] = []
+    private var panels: [(window: NSWindow, view: OverlaySurfaceView)] = []
     private var windowsByID: [CGWindowID: SCWindow] = [:]
+
+    /// Bounded walk down the window stack: the list can contain windows we do
+    /// not know (other apps' panels), and this caps the walk if none are ours.
+    private static let maxWindowStackWalk = 12
 
     private(set) var session: CaptureSession?
     private(set) var hoveredWindow: SCWindow?
@@ -419,7 +423,7 @@ final class OverlayController {
             )
             panel.level = .screenSaver
             panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
-            panel.isReleasedWhenClosed = false
+            WindowChrome.own(panel)
             panel.animationBehavior = .none
             panel.isOpaque = true
             panel.backgroundColor = .black
@@ -436,7 +440,9 @@ final class OverlayController {
             container.layer?.contentsScale = display.scale
             container.layer?.backgroundColor = NSColor.black.cgColor
 
-            let view = SelectionView(display: display, session: session, controller: self)
+            let view: OverlaySurfaceView = session.mode == .colorPicker
+                ? ColorPickView(display: display, session: session, controller: self)
+                : CaptureSelectionView(display: display, session: session, controller: self)
             view.autoresizingMask = [.width, .height]
             container.addSubview(view)
 
@@ -446,7 +452,7 @@ final class OverlayController {
             panels.append((panel, view))
         }
 
-        // Make one panel key so Escape / Return reach a SelectionView (the
+        // Make one panel key so Escape / Return reach a surface view (the
         // selection is shared, so which panel it is does not matter).
         if let first = panels.first {
             first.window.makeKey()
@@ -479,9 +485,7 @@ final class OverlayController {
 
     /// Copy the picked colour's hex and close.
     func finishColorPick(_ color: NSColor) {
-        let pasteboard = NSPasteboard.general
-        pasteboard.clearContents()
-        pasteboard.setString(color.hexString, forType: .string)
+        Export.copyString(color.hexString)
         dismiss()
     }
 
@@ -542,7 +546,7 @@ final class OverlayController {
     /// The window under `point`, ignoring our own panels.
     private func windowUnder(_ point: CGPoint) -> SCWindow? {
         var reference = panels.first { $0.window.frame.contains(point) }?.window.windowNumber ?? 0
-        for _ in 0..<12 {
+        for _ in 0..<Self.maxWindowStackWalk {
             let number = NSWindow.windowNumber(at: point, belowWindowWithWindowNumber: reference)
             if number == 0 {
                 return nil

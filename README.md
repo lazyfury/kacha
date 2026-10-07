@@ -33,30 +33,41 @@ macOS 截图工具。**纯 Swift**：AppKit 管窗口、Core Graphics 画界面�
 ```text
 Sources/KachaMac/
   main.swift              NSApplication + .accessory + 启动参数
-  AppDelegate.swift       生命周期、菜单、热键、截图/取色入口、smoke 自检
-  MenuBar.swift           NSStatusItem + 菜单
-  Hotkeys.swift           Carbon RegisterEventHotKey（无需辅助功能权限）
-  Preferences.swift       热键 / 开机自启（UserDefaults）
-  LaunchAtLogin.swift     SMAppService
-  Permissions.swift       屏幕录制 TCC 引导
-
-  Capture.swift           ScreenCaptureKit：冻帧 / 单窗口捕获
-  Session.swift           一次截图会话的共享状态（冻帧、选区、合成图、悬停窗口）
-  OverlayWindow.swift     每屏一个无边框 NSPanel：冻帧背景 + 选区 / 窗口高亮 / 取色
-  Selection.swift         选区拖拽几何（纯逻辑，可单测）
-  Compose.swift           选区 → 原生像素 RGBA
-  ColorPicker.swift       取色器放大镜 + hex
-
-  EditorWindow.swift      编辑窗（NSWindow 宿主）
-  EditorRootView.swift    编辑窗 SwiftUI：玻璃工具栏 + 画布 representable
-  EditorCanvasView.swift  画布：合成图 + 标注绘制 + 图像/视图坐标映射
-  Annotate.swift          标注数据模型 + SF Symbols
-  PinWindows.swift        钉图悬浮窗
-  SettingsWindow.swift    设置窗（NSWindow 宿主）
-  SettingsRootView.swift  设置窗 SwiftUI：系统设置风顶栏 / 分组卡片 / 底部动作栏
-  HotkeyRecorderView.swift SwiftUI 热键录制按钮 + 本地 NSEvent 监听
-  PNG.swift               ImageIO PNG 编码
-  SelfCheck.swift         `--selfcheck` 纯逻辑断言
+  App/                    生命周期与入口
+    AppDelegate.swift     生命周期、菜单、热键、截图/取色入口、smoke 自检
+    MenuBar.swift         NSStatusItem + 菜单
+    LaunchOptions.swift   --selfcheck / --smoke-* 参数
+  Core/                   纯逻辑 / 模型 / 抓屏结果（不建窗口）
+    Capture.swift         ScreenCaptureKit：冻帧 / 单窗口捕获
+    Session.swift         一次截图会话的共享状态（冻帧、选区、合成图、悬停窗口）
+    Selection.swift       选区拖拽几何（纯逻辑，可单测）
+    Compose.swift         选区 → 原生像素 RGBA
+    Annotate.swift        标注数据模型 + SF Symbols
+    EditorState.swift     编辑状态（工具 / 颜色 / 标注 / 撤销栈）
+    EditorGeometry.swift  画布几何与尺寸启发（纯函数）
+    Mosaic.swift          块平均马赛克源 + 像素取样
+  UI/AppKit/              NSWindow / NSView + Core Graphics 绘制
+    OverlayWindow.swift   每屏一个无边框 NSPanel：冻帧背景 + 选区 / 窗口高亮 / 取色
+    EditorWindow.swift    编辑窗（NSWindow 宿主）
+    EditorCanvasView.swift 画布：鼠标 / 文字输入 / 导出
+    AnnotationRenderer.swift 标注栅格化（预览与导出共用）
+    PinWindows.swift      钉图悬浮窗
+    ColorPicker.swift     取色器放大镜 + hex
+    WindowChrome.swift    窗口 chrome / isReleasedWhenClosed 统一设置
+  UI/SwiftUI/             NSHostingView 承载的 chrome
+    EditorRootView.swift  编辑窗 SwiftUI：玻璃工具栏 + 画布 representable
+    SettingsWindow.swift  设置窗（NSWindow 宿主）
+    SettingsRootView.swift 设置窗 SwiftUI：系统设置风顶栏 / 分组卡片 / 底部动作栏
+    HotkeyRecorderView.swift SwiftUI 热键录制按钮 + 本地 NSEvent 监听
+  Helper/                 系统能力与工具
+    Hotkeys.swift         Carbon RegisterEventHotKey（无需辅助功能权限）
+    Preferences.swift     热键 / 开机自启（UserDefaults）
+    LaunchAtLogin.swift   SMAppService
+    Permissions.swift     屏幕录制 TCC 引导
+    PNG.swift             ImageIO PNG 编码
+    Export.swift          剪贴板 / 保存面板（编辑器与钉图共用）
+    ShotSound.swift       系统截图提示音
+    SelfCheck.swift       `--selfcheck` 纯逻辑断言
 
 packaging/Info.plist      LSUIElement=true、LSMinimumSystemVersion=14.0
 packaging/AppIcon.png     应用图标源图（1024×1024，macOS 图标网格）

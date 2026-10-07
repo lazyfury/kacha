@@ -38,6 +38,30 @@ struct Hotkey: Equatable {
         if modifiers.contains(.control) { mask |= UInt32(controlKey) }
         return mask
     }
+
+    /// The key equivalent a menu item can show, or nil when the label is not a
+    /// single letter/digit (those cannot be menu key equivalents).
+    var menuKeyEquivalent: (key: String, modifiers: NSEvent.ModifierFlags)? {
+        guard
+            keyLabel.count == 1,
+            let character = keyLabel.first,
+            character.isLetter || character.isNumber
+        else {
+            return nil
+        }
+        return (String(character).lowercased(), modifiers)
+    }
+
+    /// Apply this hotkey as a menu item's key equivalent (clearing it otherwise).
+    func apply(to item: NSMenuItem?) {
+        if let equivalent = menuKeyEquivalent {
+            item?.keyEquivalent = equivalent.key
+            item?.keyEquivalentModifierMask = equivalent.modifiers
+        } else {
+            item?.keyEquivalent = ""
+            item?.keyEquivalentModifierMask = []
+        }
+    }
 }
 
 enum Preferences {

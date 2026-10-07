@@ -2,6 +2,7 @@
 
 import AppKit
 
+@MainActor
 final class MenuBar {
     private let statusItem: NSStatusItem
     private let onCapture: () -> Void
@@ -90,20 +91,9 @@ final class MenuBar {
 
     /// Show the current shortcuts next to the menu items.
     func updateShortcuts() {
-        apply(Preferences.captureHotkey, to: captureItem)
-        apply(Preferences.fullScreenHotkey, to: fullScreenItem)
-        apply(Preferences.pickerHotkey, to: pickerItem)
-    }
-
-    private func apply(_ hotkey: Hotkey, to item: NSMenuItem?) {
-        let label = hotkey.keyLabel
-        if label.count == 1, let character = label.first, character.isLetter || character.isNumber {
-            item?.keyEquivalent = String(character).lowercased()
-            item?.keyEquivalentModifierMask = hotkey.modifiers
-        } else {
-            item?.keyEquivalent = ""
-            item?.keyEquivalentModifierMask = []
-        }
+        Preferences.captureHotkey.apply(to: captureItem)
+        Preferences.fullScreenHotkey.apply(to: fullScreenItem)
+        Preferences.pickerHotkey.apply(to: pickerItem)
     }
 
     @objc private func captureClicked() { onCapture() }

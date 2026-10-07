@@ -82,10 +82,10 @@ enum Capture {
         // highlight an occluded window behind the cursor. Filter to normal-layer,
         // on-screen, opaque-enough windows that are not ours.
         let order = Self.onScreenWindowOrder(excluding: ownPID)
-        var byID: [CGWindowID: SCWindow] = [:]
-        for window in content.windows where byID[window.windowID] == nil {
-            byID[window.windowID] = window
-        }
+        let byID = Dictionary(
+            content.windows.map { ($0.windowID, $0) },
+            uniquingKeysWith: { first, _ in first }
+        )
         let windows = order.compactMap { byID[$0] }
 
         return CaptureResult(displays: captured, windows: windows)

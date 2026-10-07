@@ -5,6 +5,7 @@
 import AppKit
 import SwiftUI
 
+@MainActor
 final class SettingsWindow: NSObject, NSWindowDelegate {
     private var window: NSWindow?
 
@@ -27,12 +28,10 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         let window = NSWindow(contentViewController: hosting)
         window.title = "设置"
         window.styleMask = [.titled, .closable, .fullSizeContentView]
-        window.isReleasedWhenClosed = false
+        WindowChrome.own(window)
         window.delegate = self
         // Seamless chrome: the SwiftUI content supplies the title and footer.
-        window.titlebarAppearsTransparent = true
-        window.titleVisibility = .hidden
-        window.titlebarSeparatorStyle = .none
+        WindowChrome.seamless(window)
         window.setContentSize(hosting.view.fittingSize)
 
         window.center()

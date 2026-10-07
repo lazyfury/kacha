@@ -48,7 +48,7 @@ macOS 截图工具。**纯 Swift 应用**：AppKit 管窗口 / 原生事件与�
   在 `objc_release` 崩溃（EXC_BAD_ACCESS）。回归：`scripts/run.sh --smoke-editor`
   （开编辑窗 → 走 `windowWillClose` 关窗 → 退出，退出码非 0 即失败）。
 - **覆盖层第一个 mouse-down 要区分「点窗口」和「拉选区」。** 用位移阈值
-  （`SelectionView.clickSlop`）判定：没超过阈值就是点击（选窗口 / 选桌面），超过了才是拖拽圈选。
+  （`CaptureSelectionView.clickSlop`）判定：没超过阈值就是点击（选窗口 / 选桌面），超过了才是拖拽圈选。
 - **多显示器坐标统一用全局逻辑点，原点左上**（= CoreGraphics 全局坐标）。每个覆盖层减去自己
   `NSScreen.frame` 的 origin 得到局部坐标；选择状态存全局坐标，跨屏选择才成立。
 - **标注的默认线宽 / 字号按图片对角线算**，随截图分辨率缩放；别写死像素值，否则 4K 区域上
@@ -104,15 +104,23 @@ scripts/package.sh                   # 组装 dist/kacha.app
 
 ## 目录地图
 
+`Sources/KachaMac/` 按职责分层：`App/`（生命周期入口）、`Core/`（纯逻辑 / 模型，不建窗口）、
+`UI/AppKit/`、`UI/SwiftUI/`、`Helper/`（系统能力与工具）。`main.swift` 保持在 target 根。
+SwiftPM 递归编译子目录，**加文件夹不用改 `Package.swift`**。
+
 | 需要… | 看这里 |
 |---|---|
 | 总体设计 / 阶段 / 风险 | `DESIGN.md` |
-| 生命周期 / 菜单 / 热键 / 入口 | `Sources/KachaMac/AppDelegate.swift`、`MenuBar.swift`、`Hotkeys.swift` |
-| 抓屏 / 冻帧 / 单窗口捕获 | `Sources/KachaMac/Capture.swift` |
-| 会话（冻帧 / 选区 / 合成） | `Sources/KachaMac/Session.swift`、`Selection.swift`、`Compose.swift` |
-| 框选层 / 取色层 | `Sources/KachaMac/OverlayWindow.swift`、`ColorPicker.swift` |
-| 编辑窗 / 画布 / 标注 | `Sources/KachaMac/EditorWindow.swift`、`EditorCanvasView.swift`、`Annotate.swift` |
-| 钉图 / 设置 / 热键录制 | `PinWindows.swift`、`SettingsWindow.swift`、`HotkeyRecorderView.swift` |
-| 截图提示音（系统音效，无资源文件） | `ShotSound.swift`、`Preferences.swift` |
-| PNG 导出 / 权限 | `PNG.swift`、`Permissions.swift` |
+| 生命周期 / 菜单 / 入口 | `Sources/KachaMac/App/AppDelegate.swift`、`App/MenuBar.swift` |
+| 全局热键 / 偏好 / 权限 / 开机自启 | `Sources/KachaMac/Helper/Hotkeys.swift`、`Preferences.swift`、`Permissions.swift`、`LaunchAtLogin.swift` |
+| 抓屏 / 冻帧 / 单窗口捕获 | `Sources/KachaMac/Core/Capture.swift` |
+| 会话（冻帧 / 选区 / 合成） | `Sources/KachaMac/Core/Session.swift`、`Selection.swift`、`Compose.swift` |
+| 框选层 / 取色层 | `Sources/KachaMac/UI/AppKit/OverlayWindow.swift`、`ColorPicker.swift` |
+| 剪贴板 / 保存面板 | `Sources/KachaMac/Helper/Export.swift`、`PNG.swift` |
+| 窗口 chrome / isReleasedWhenClosed | `Sources/KachaMac/UI/AppKit/WindowChrome.swift` |
+| 编辑窗 / 画布 / 标注 | `Sources/KachaMac/UI/AppKit/EditorWindow.swift`、`EditorCanvasView.swift`、`AnnotationRenderer.swift`、`Core/Annotate.swift`、`EditorState.swift` |
+| 画布几何 / 马赛克 | `Sources/KachaMac/Core/EditorGeometry.swift`、`Mosaic.swift` |
+| 钉图 / 设置 / 热键录制 | `Sources/KachaMac/UI/AppKit/PinWindows.swift`、`UI/SwiftUI/SettingsWindow.swift`、`HotkeyRecorderView.swift` |
+| 截图提示音（系统音效，无资源文件） | `Sources/KachaMac/Helper/ShotSound.swift` |
+| PNG 导出 | `Sources/KachaMac/Helper/PNG.swift` |
 | 打包 / 脚本 | `packaging/Info.plist`、`scripts/` |

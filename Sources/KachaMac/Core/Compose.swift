@@ -3,16 +3,60 @@
 // The frozen frames are per display; a selection can span displays (or part of
 // one). Each display's image is drawn into an output context at the anchor
 // display's scale, so a Retina region comes out at full resolution. The result
-// keeps a CGImage (for drawing) and its RGBA8 pixels (for mosaic sampling).
+// keeps a CGImage (for drawing); the RGBA8 pixel copy for mosaic sampling is
+// rasterized only when the mosaic tool first asks for it.
 
 import CoreGraphics
 
-struct ComposedImage {
+/// A composed capture: the renderable image plus its geometry. The tight RGBA8
+/// copy (used only by the mosaic tool) is built on first access and cached, so
+/// the common capture path never pays for the extra full-size buffer.
+final class ComposedImage {
     let image: CGImage
     let width: Int
     let height: Int
+
+    private var cachedPixels: [UInt8]?
+
+    init(image: CGImage, width: Int, height: Int) {
+        self.image = image
+        self.width = width
+        self.height = height
+    }
+
     /// Tightly packed RGBA8, for the mosaic tool.
-    let pixels: [UInt8]
+    var pixels: [UInt8] {
+        if let cachedPixels { return cachedPixels }
+        let made = Self.rasterize(image)
+        cachedPixels = made
+        return made
+    }
+
+    /// Draw `image` into a tightly packed premultiplied-RGBA8 buffer.
+    private static func rasterize(_ image: CGImage) -> [UInt8] {
+        let w = image.width
+        let h = image.height
+        guard w > 0, h > 0 else { return [] }
+        var buffer = [UInt8](repeating: 0, count: w * h * 4)
+        let colorSpace = CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB()
+        buffer.withUnsafeMutableBytes { raw in
+            guard
+                let ctx = CGContext(
+                    data: raw.baseAddress,
+                    width: w,
+                    height: h,
+                    bitsPerComponent: 8,
+                    bytesPerRow: w * 4,
+                    space: colorSpace,
+                    bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+                )
+            else {
+                return
+            }
+            ctx.draw(image, in: CGRect(x: 0, y: 0, width: w, height: h))
+        }
+        return buffer
+    }
 }
 
 enum Compose {
@@ -49,10 +93,9 @@ enum Compose {
 
         var any = false
         for display in displays {
-            guard let overlap = Selection.intersection(selection, display.globalRect) else {
+            guard Selection.intersection(selection, display.globalRect) != nil else {
                 continue
             }
-            _ = overlap
             any = true
             // Draw the whole display image (the context clips it to the
             // selection); map its logical origin into output pixels.
@@ -65,7 +108,7 @@ enum Compose {
             ctx.draw(display.image, in: rect)
         }
         guard any, let image = ctx.makeImage() else { return nil }
-        return ComposedImage(image: image, width: outW, height: outH, pixels: rgba(from: ctx))
+        return ComposedImage(image: image, width: outW, height: outH)
     }
 
     /// Wrap an already-rendered image (a captured window) as a composed image.
@@ -89,28 +132,6 @@ enum Compose {
         }
         ctx.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
         guard let rendered = ctx.makeImage() else { return nil }
-        return ComposedImage(image: rendered, width: width, height: height, pixels: rgba(from: ctx))
-    }
-
-    /// Read the context's pixels as tightly packed RGBA8 (handles row padding).
-    private static func rgba(from ctx: CGContext) -> [UInt8] {
-        guard let data = ctx.data else { return [] }
-        let width = ctx.width
-        let height = ctx.height
-        let stride = width * 4
-        let bytesPerRow = ctx.bytesPerRow
-        if bytesPerRow == stride {
-            return [UInt8](UnsafeRawBufferPointer(start: data, count: stride * height))
-        }
-        var out = [UInt8](repeating: 0, count: stride * height)
-        let source = data.assumingMemoryBound(to: UInt8.self)
-        out.withUnsafeMutableBufferPointer { dest in
-            for row in 0..<height {
-                let src = source + row * bytesPerRow
-                let dst = dest.baseAddress! + row * stride
-                dst.update(from: src, count: stride)
-            }
-        }
-        return out
+        return ComposedImage(image: rendered, width: width, height: height)
     }
 }

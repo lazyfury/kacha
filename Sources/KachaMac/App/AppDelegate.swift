@@ -7,8 +7,8 @@
 import AppKit
 import CoreGraphics
 import ScreenCaptureKit
-import UniformTypeIdentifiers
 
+@MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private let options: LaunchOptions
     private let overlays = OverlayController()
@@ -136,20 +136,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func updateMenuShortcuts() {
-        apply(Preferences.captureHotkey, to: captureMenuItem)
-        apply(Preferences.pickerHotkey, to: pickerMenuItem)
-        apply(Preferences.fullScreenHotkey, to: fullScreenMenuItem)
-    }
-
-    private func apply(_ hotkey: Hotkey, to item: NSMenuItem?) {
-        let label = hotkey.keyLabel
-        if label.count == 1, let character = label.first, character.isLetter || character.isNumber {
-            item?.keyEquivalent = String(character).lowercased()
-            item?.keyEquivalentModifierMask = hotkey.modifiers
-        } else {
-            item?.keyEquivalent = ""
-            item?.keyEquivalentModifierMask = []
-        }
+        Preferences.captureHotkey.apply(to: captureMenuItem)
+        Preferences.pickerHotkey.apply(to: pickerMenuItem)
+        Preferences.fullScreenHotkey.apply(to: fullScreenMenuItem)
     }
 
     @objc private func openSettings() {
@@ -159,45 +148,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: - Capture
 
     /// Freeze every display and raise the unified overlay (drag a region, click a
-    /// window or the desktop).
-    @objc private func startCapture() {
+    /// window or the desktop). Shared by the capture and colour-picker entries.
+    private func startOverlay(mode: OverlayMode) {
         guard ScreenPermission.request() else {
             presentPermissionAlert()
             return
         }
         Task { @MainActor in
-            do {
-                let result = try await Capture.frozenDisplays()
-                let session = CaptureSession()
-                for display in result.displays {
-                    session.setDisplay(display)
-                }
-                self.overlays.show(session: session, windows: result.windows)
-            } catch {
-                self.presentCaptureError(error)
-            }
+            guard let result = await self.freezeDisplays() else { return }
+            let session = Self.session(from: result, mode: mode)
+            self.overlays.show(session: session, windows: result.windows)
         }
     }
 
-    /// Freeze every display and open the colour picker.
+    @objc private func startCapture() {
+        startOverlay(mode: .capture)
+    }
+
     @objc private func startColorPicker() {
-        guard ScreenPermission.request() else {
-            presentPermissionAlert()
-            return
-        }
-        Task { @MainActor in
-            do {
-                let result = try await Capture.frozenDisplays()
-                let session = CaptureSession()
-                session.mode = .colorPicker
-                for display in result.displays {
-                    session.setDisplay(display)
-                }
-                self.overlays.show(session: session, windows: result.windows)
-            } catch {
-                self.presentCaptureError(error)
-            }
-        }
+        startOverlay(mode: .colorPicker)
     }
 
     /// Freeze every display and send the display under the cursor straight to
@@ -208,25 +177,42 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
         Task { @MainActor in
-            do {
-                let result = try await Capture.frozenDisplays()
-                guard
-                    let display = Self.display(under: NSEvent.mouseLocation, in: result.displays)
-                        ?? result.displays.first
-                else {
-                    throw CaptureError.noDisplays
-                }
-                let session = CaptureSession()
-                for item in result.displays {
-                    session.setDisplay(item)
-                }
-                session.composed = Compose.composed(from: display.image)
-                ShotSound.playIfEnabled()
-                self.editor.show(session: session)
-            } catch {
-                self.presentCaptureError(error)
+            guard let result = await self.freezeDisplays() else { return }
+            guard
+                let display = Self.display(under: NSEvent.mouseLocation, in: result.displays)
+                    ?? result.displays.first
+            else {
+                self.presentCaptureError(CaptureError.noDisplays)
+                return
             }
+            let session = Self.session(from: result)
+            session.composed = Compose.composed(from: display.image)
+            ShotSound.playIfEnabled()
+            self.editor.show(session: session)
         }
+    }
+
+    /// Freeze every display, showing the error alert on failure.
+    private func freezeDisplays() async -> CaptureResult? {
+        do {
+            return try await Capture.frozenDisplays()
+        } catch {
+            presentCaptureError(error)
+            return nil
+        }
+    }
+
+    /// A session over `result`'s frozen displays, in the given overlay mode.
+    private static func session(
+        from result: CaptureResult,
+        mode: OverlayMode = .capture
+    ) -> CaptureSession {
+        let session = CaptureSession()
+        session.mode = mode
+        for display in result.displays {
+            session.setDisplay(display)
+        }
+        return session
     }
 
     /// The captured display whose screen contains `point` (AppKit global coords).
@@ -259,25 +245,37 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func presentPermissionAlert() {
-        let alert = NSAlert()
-        alert.messageText = "需要「屏幕录制」权限"
-        alert.informativeText =
-            "请在「系统设置 › 隐私与安全性 › 屏幕录制」里勾选 kacha，然后重新启动应用。"
-        alert.addButton(withTitle: "打开系统设置")
-        alert.addButton(withTitle: "稍后")
-        NSApp.activate(ignoringOtherApps: true)
-        if alert.runModal() == .alertFirstButtonReturn {
+        let response = presentAlert(
+            "需要「屏幕录制」权限",
+            informative: "请在「系统设置 › 隐私与安全性 › 屏幕录制」里勾选 kacha，然后重新启动应用。",
+            buttons: ["打开系统设置", "稍后"]
+        )
+        if response == .alertFirstButtonReturn {
             ScreenPermission.openSystemSettings()
         }
     }
 
     private func presentCaptureError(_ error: Error) {
+        _ = presentAlert("截图失败", informative: error.localizedDescription)
+    }
+
+    /// Show a modal alert, activating the app first. Returns the chosen button.
+    @discardableResult
+    private func presentAlert(
+        _ message: String,
+        informative: String,
+        style: NSAlert.Style = .warning,
+        buttons: [String] = ["好"]
+    ) -> NSApplication.ModalResponse {
         let alert = NSAlert()
-        alert.messageText = "截图失败"
-        alert.informativeText = error.localizedDescription
-        alert.alertStyle = .warning
+        alert.messageText = message
+        alert.informativeText = informative
+        alert.alertStyle = style
+        for button in buttons {
+            alert.addButton(withTitle: button)
+        }
         NSApp.activate(ignoringOtherApps: true)
-        alert.runModal()
+        return alert.runModal()
     }
 
     // MARK: - Smoke tests (no screen-recording permission)
@@ -314,9 +312,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
             guard let self else { return }
             if let data = self.editor.exportForSmoke() {
-                let pasteboard = NSPasteboard.general
-                pasteboard.clearContents()
-                pasteboard.setData(data, forType: .png)
+                Export.copyPNG(data)
             }
             let copied = NSPasteboard.general.data(forType: .png) != nil
             FileHandle.standardError.write(

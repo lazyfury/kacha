@@ -21,7 +21,7 @@ enum ShotSound {
     static let fallbackName = "Tink"
 
     /// The first source that resolves. Resolved once; `NSSound` is a single-shot
-    /// object and cheap to keep.
+    /// object and cheap to keep. Playback is main-thread only (see `play`).
     static let sound: NSSound? =
         NSSound(contentsOfFile: systemCapturePath, byReference: true)
         ?? NSSound(named: NSSound.Name(fallbackName))
@@ -35,8 +35,9 @@ enum ShotSound {
 
     static func play() {
         guard let sound else { return }
-        // `NSSound` is single-shot: `play()` fails while it is still playing, so
-        // restart it for rapid captures.
+        // `NSSound` is single-shot and not thread-safe: a `play()` while it is
+        // still playing fails, so restart it for rapid captures. `playIfEnabled`
+        // is only ever called from the main thread (capture completion).
         sound.stop()
         sound.play()
     }

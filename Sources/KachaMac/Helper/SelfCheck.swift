@@ -6,6 +6,7 @@ import AppKit
 import CoreGraphics
 import Foundation
 
+@MainActor
 enum SelfCheck {
     static func run() -> Int32 {
         var failures = 0
@@ -21,6 +22,7 @@ enum SelfCheck {
         checkColor(check)
         checkAnnotations(check)
         checkSymbols(check)
+        checkHotkeys(check)
         checkSound(check)
 
         print(failures == 0 ? "selfcheck: ok" : "selfcheck: \(failures) failure(s)")
@@ -77,12 +79,30 @@ enum SelfCheck {
 
     private static func checkCompose(_ check: (Bool, String) -> Void) {
         // One Retina display: 20×10 logical points → 40×20 px.
-        let retina = display(
-            origin: .zero,
-            logical: CGSize(width: 100, height: 50),
-            scale: 2,
-            color: CGColor(srgbRed: 0.1, green: 0.2, blue: 0.3, alpha: 1)
-        )
+        guard
+            let retina = display(
+                origin: .zero,
+                logical: CGSize(width: 100, height: 50),
+                scale: 2,
+                color: CGColor(srgbRed: 0.1, green: 0.2, blue: 0.3, alpha: 1)
+            ),
+            let retinaLeft = display(
+                origin: .zero,
+                logical: CGSize(width: 200, height: 100),
+                scale: 2,
+                color: CGColor(srgbRed: 1, green: 0, blue: 0, alpha: 1)
+            ),
+            let plainRight = display(
+                origin: CGPoint(x: 200, y: 0),
+                logical: CGSize(width: 100, height: 100),
+                scale: 1,
+                color: CGColor(srgbRed: 0, green: 0, blue: 1, alpha: 1)
+            )
+        else {
+            check(false, "could not build the test displays")
+            return
+        }
+
         let crop = Compose.compose([retina], selection: CGRect(x: 10, y: 10, width: 20, height: 10))
         check(crop?.width == 40 && crop?.height == 20, "retina region crops at native scale")
         if let crop {
@@ -93,18 +113,6 @@ enum SelfCheck {
         }
 
         // Mixed DPI, anchor on the 2x display → output at 2x.
-        let retinaLeft = display(
-            origin: .zero,
-            logical: CGSize(width: 200, height: 100),
-            scale: 2,
-            color: CGColor(srgbRed: 1, green: 0, blue: 0, alpha: 1)
-        )
-        let plainRight = display(
-            origin: CGPoint(x: 200, y: 0),
-            logical: CGSize(width: 100, height: 100),
-            scale: 1,
-            color: CGColor(srgbRed: 0, green: 0, blue: 1, alpha: 1)
-        )
         if let mixed = Compose.compose(
             [retinaLeft, plainRight],
             selection: CGRect(x: 180, y: 0, width: 40, height: 10)
@@ -259,6 +267,21 @@ enum SelfCheck {
         }
     }
 
+    /// The menu key-equivalent rule must only accept a single letter/digit.
+    private static func checkHotkeys(_ check: (Bool, String) -> Void) {
+        if let equivalent = Hotkey.default.menuKeyEquivalent {
+            check(equivalent.key == "a", "default hotkey maps to menu key 'a'")
+            check(
+                equivalent.modifiers == [.command, .shift],
+                "default hotkey keeps its modifiers"
+            )
+        } else {
+            check(false, "default hotkey has a menu key equivalent")
+        }
+        let arrow = Hotkey(keyCode: 123, modifiers: [.command], keyLabel: "←")
+        check(arrow.menuKeyEquivalent == nil, "non-alphanumeric labels have no menu equivalent")
+    }
+
     /// The fallback must always resolve; the exact system capture sound is not a
     /// documented path and may legitimately move between macOS releases, so it is
     /// only covered by the "a source resolves" check below.
@@ -303,27 +326,32 @@ enum SelfCheck {
         logical: CGSize,
         scale: CGFloat,
         color: CGColor
-    ) -> CapturedDisplay {
+    ) -> CapturedDisplay? {
         let width = Int(logical.width * scale)
         let height = Int(logical.height * scale)
         let colorSpace = CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB()
-        let ctx = CGContext(
-            data: nil,
-            width: width,
-            height: height,
-            bitsPerComponent: 8,
-            bytesPerRow: 0,
-            space: colorSpace,
-            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
-        )!
+        guard
+            let ctx = CGContext(
+                data: nil,
+                width: width,
+                height: height,
+                bitsPerComponent: 8,
+                bytesPerRow: 0,
+                space: colorSpace,
+                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+            )
+        else {
+            return nil
+        }
         ctx.setFillColor(color)
         ctx.fill(CGRect(x: 0, y: 0, width: width, height: height))
+        guard let image = ctx.makeImage() else { return nil }
         return CapturedDisplay(
             displayID: 1,
             origin: origin,
             logicalSize: logical,
             scale: scale,
-            image: ctx.makeImage()!
+            image: image
         )
     }
 

@@ -4,6 +4,7 @@
 import AppKit
 import SwiftUI
 
+@MainActor
 final class EditorWindow: NSObject, NSWindowDelegate {
     private var window: NSWindow?
     private var canvas: EditorCanvasView?
@@ -48,14 +49,12 @@ final class EditorWindow: NSObject, NSWindowDelegate {
         )
         window.title = "kacha — 编辑"
         // ARC owns this window; AppKit must not also release it on close.
-        window.isReleasedWhenClosed = false
+        WindowChrome.own(window)
         window.delegate = self
         window.contentMinSize = NSSize(width: 840, height: 460)
         // The content fills the window and the toolbar sits in the (transparent,
         // title-less) titlebar area, so there is no empty strip above it.
-        window.titlebarAppearsTransparent = true
-        window.titleVisibility = .hidden
-        window.titlebarSeparatorStyle = .none
+        WindowChrome.seamless(window)
         window.backgroundColor = NSColor(calibratedWhite: 0.08, alpha: 1)
 
         let root = EditorRootView(
@@ -78,27 +77,12 @@ final class EditorWindow: NSObject, NSWindowDelegate {
 
     private func copyImage() {
         guard let data = canvas?.renderExport() else { return }
-        let pasteboard = NSPasteboard.general
-        pasteboard.clearContents()
-        pasteboard.setData(data, forType: .png)
+        Export.copyPNG(data)
     }
 
     private func saveImage() {
         guard let data = canvas?.renderExport() else { return }
-        let panel = NSSavePanel()
-        panel.allowedContentTypes = [.png]
-        panel.nameFieldStringValue = Self.timestamp() + ".png"
-        panel.canCreateDirectories = true
-        if panel.runModal() == .OK, let url = panel.url {
-            do {
-                try data.write(to: url)
-            } catch {
-                let alert = NSAlert()
-                alert.messageText = "保存失败"
-                alert.informativeText = error.localizedDescription
-                alert.runModal()
-            }
-        }
+        Export.savePNG(data, suggestedName: Self.timestamp() + ".png")
     }
 
     private func pinImage() {

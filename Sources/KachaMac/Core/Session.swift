@@ -22,6 +22,7 @@ enum OverlayMode {
     case colorPicker
 }
 
+@MainActor
 final class CaptureSession {
     private(set) var displays: [CGDirectDisplayID: CapturedDisplay] = [:]
     /// What the overlay does with a click.

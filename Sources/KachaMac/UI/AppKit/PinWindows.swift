@@ -7,7 +7,6 @@
 // Escape to close. Large images are scaled down to fit the screen.
 
 import AppKit
-import UniformTypeIdentifiers
 
 /// A borderless floating window that can become key (for Escape) and never
 /// releases itself on close (ARC owns it).
@@ -232,19 +231,11 @@ final class PinView: NSView {
     }
 
     @objc private func copyImage() {
-        let pasteboard = NSPasteboard.general
-        pasteboard.clearContents()
-        pasteboard.setData(png, forType: .png)
+        Export.copyPNG(png)
     }
 
     @objc private func saveImage() {
-        let panel = NSSavePanel()
-        panel.allowedContentTypes = [.png]
-        panel.nameFieldStringValue = "kacha-pin.png"
-        panel.canCreateDirectories = true
-        if panel.runModal() == .OK, let url = panel.url {
-            try? png.write(to: url)
-        }
+        Export.savePNG(png, suggestedName: "kacha-pin.png")
     }
 
     @objc private func closePin() {
@@ -291,6 +282,7 @@ final class PinView: NSView {
     }
 }
 
+@MainActor
 final class PinWindows: NSObject, NSWindowDelegate {
     private var windows: [PinWindow] = []
 
@@ -313,7 +305,7 @@ final class PinWindows: NSObject, NSWindowDelegate {
             defer: false
         )
         // ARC owns these windows; AppKit must not also release them on close.
-        window.isReleasedWhenClosed = false
+        WindowChrome.own(window)
         window.level = .floating
         window.isOpaque = true
         window.backgroundColor = .black

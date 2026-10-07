@@ -102,10 +102,6 @@ struct Annotation: Equatable {
     /// Whether the rectangle tool fills its shape (ignored by other tools).
     var filled = false
 
-    static func between(_ tool: Tool, _ from: CGPoint, _ to: CGPoint) -> Annotation {
-        Annotation(tool: tool, points: [from, to], color: [1, 0.2, 0.2, 1], stroke: 2, text: "")
-    }
-
     /// The axis-aligned bounds of the annotation's points, if any.
     func bounds() -> CGRect? {
         guard let first = points.first else { return nil }

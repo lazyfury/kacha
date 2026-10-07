@@ -131,7 +131,7 @@ enum Selection {
     /// selection the whole viewport is returned as one rectangle.
     static func maskRects(viewport: CGRect, selection: CGRect?) -> [CGRect] {
         guard let selection, let hole = intersection(selection, viewport) else {
-            return [viewport, .zero, .zero, .zero]
+            return [viewport]
         }
         return [
             // above

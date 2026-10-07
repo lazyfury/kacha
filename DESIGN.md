@@ -57,6 +57,10 @@
 - **没有渲染循环**：画布是 AppKit 普通视图，状态变化时 `setNeedsDisplay`；不跑
   `CADisplayLink` / Metal。
 - **帧由事件驱动**：鼠标 / 键盘事件改 `CaptureSession` / `EditorState` 的状态，视图重绘。
+- **主线程隔离**：状态与 UI 类（`CaptureSession` / `EditorState` / 各窗口与控制器 /
+  `AnnotationRenderer`）一律标注 `@MainActor`；`main.swift` 顶层代码用
+  `MainActor.assumeIsolated` 进入该隔离。纯函数 / 系统包装（`Selection` / `Compose` /
+  `Mosaic` / `Preferences` / `PNG` 等）保持 nonisolated。
 
 ---
 
@@ -66,29 +70,43 @@
 kacha/
 ├── Package.swift                 # SwiftPM：可执行目标 kacha-mac
 ├── Sources/KachaMac/
-│   ├── main.swift                # NSApplication + .accessory + 启动参数
-│   ├── AppDelegate.swift         # 生命周期 / 菜单 / 热键 / 截图·取色入口 / smoke
-│   ├── MenuBar.swift             # NSStatusItem + 菜单
-│   ├── Hotkeys.swift             # Carbon RegisterEventHotKey
-│   ├── Preferences.swift         # 热键 / 开机自启（UserDefaults）
-│   ├── LaunchAtLogin.swift       # SMAppService
-│   ├── Permissions.swift         # 屏幕录制 TCC 引导
-│   ├── Capture.swift             # ScreenCaptureKit：冻帧 / 单窗口
-│   ├── Session.swift             # CaptureSession：冻帧 / 选区 / 合成图 / 悬停
-│   ├── OverlayWindow.swift       # 每屏一个 NSPanel + SelectionView
-│   ├── Selection.swift           # 选区几何与拖拽状态（纯逻辑）
-│   ├── Compose.swift             # 选区 → 原生像素 RGBA
-│   ├── ColorPicker.swift         # 放大镜 + 像素取样 + hex
-│   ├── EditorWindow.swift        # 编辑窗（NSWindow 宿主）
-│   ├── EditorRootView.swift      # 编辑窗 SwiftUI：玻璃工具栏 + 画布 representable
-│   ├── EditorCanvasView.swift    # 画布：底图 + 标注 + 坐标映射（AppKit）
-│   ├── Annotate.swift            # 标注数据模型 + SF Symbols
-│   ├── PinWindows.swift          # 钉图悬浮窗
-│   ├── SettingsWindow.swift      # 设置窗（NSWindow 宿主）
-│   ├── SettingsRootView.swift    # 设置窗 SwiftUI：系统设置风顶栏 / 卡片 / 底栏
-│   ├── HotkeyRecorderView.swift  # SwiftUI 热键录制按钮 + 本地 NSEvent 监听
-│   ├── PNG.swift                 # ImageIO PNG 编码
-│   └── SelfCheck.swift           # --selfcheck 纯逻辑断言
+│   ├── main.swift                # NSApplication + .accessory + 启动参数（保持在 target 根）
+│   ├── App/                      # 生命周期与入口
+│   │   ├── AppDelegate.swift     # 生命周期 / 菜单 / 热键 / 截图·取色入口 / smoke
+│   │   ├── MenuBar.swift         # NSStatusItem + 菜单
+│   │   └── LaunchOptions.swift   # --selfcheck / --smoke-* 参数
+│   ├── Core/                     # 纯逻辑 / 模型 / 抓屏结果（不建窗口）
+│   │   ├── Capture.swift         # ScreenCaptureKit：冻帧 / 单窗口
+│   │   ├── Session.swift         # CaptureSession：冻帧 / 选区 / 合成图 / 悬停
+│   │   ├── Selection.swift       # 选区几何与拖拽状态（纯逻辑）
+│   │   ├── Compose.swift         # 选区 → 原生像素 RGBA
+│   │   ├── Annotate.swift        # 标注数据模型 + SF Symbols
+│   │   ├── EditorState.swift     # 编辑状态（工具 / 颜色 / 标注 / 撤销栈）
+│   │   ├── EditorGeometry.swift  # 画布几何与尺寸启发（纯函数）
+│   │   └── Mosaic.swift          # 块平均马赛克源 + 像素取样
+│   ├── UI/
+│   │   ├── AppKit/               # NSWindow / NSView + Core Graphics 绘制
+│   │   │   ├── OverlayWindow.swift     # 每屏 NSPanel + CaptureSelectionView / ColorPickView
+│   │   │   ├── EditorWindow.swift      # 编辑窗（NSWindow 宿主）
+│   │   │   ├── EditorCanvasView.swift  # 画布：鼠标 / 文字输入 / 导出
+│   │   │   ├── AnnotationRenderer.swift # 标注栅格化（预览与导出共用）
+│   │   │   ├── PinWindows.swift        # 钉图悬浮窗
+│   │   │   ├── ColorPicker.swift       # 放大镜 + 像素取样 + hex
+│   │   │   └── WindowChrome.swift      # 窗口 chrome / isReleasedWhenClosed 统一设置
+│   │   └── SwiftUI/              # NSHostingView 承载的 chrome
+│   │       ├── EditorRootView.swift     # 编辑窗：玻璃工具栏 + 画布 representable
+│   │       ├── SettingsWindow.swift     # 设置窗（NSWindow 宿主）
+│   │       ├── SettingsRootView.swift   # 设置窗：系统设置风顶栏 / 卡片 / 底栏
+│   │       └── HotkeyRecorderView.swift # 热键录制按钮 + 本地 NSEvent 监听
+│   └── Helper/                   # 系统能力与工具
+│       ├── Hotkeys.swift         # Carbon RegisterEventHotKey
+│       ├── Preferences.swift     # 热键 / 开机自启（UserDefaults）
+│       ├── LaunchAtLogin.swift   # SMAppService
+│       ├── Permissions.swift     # 屏幕录制 TCC 引导
+│       ├── PNG.swift             # ImageIO PNG 编码
+│       ├── Export.swift          # 剪贴板 / 保存面板（编辑器与钉图共用）
+│       ├── ShotSound.swift       # 系统截图提示音
+│       └── SelfCheck.swift       # --selfcheck 纯逻辑断言
 ├── packaging/Info.plist          # LSUIElement=true、LSMinimumSystemVersion=14.0
 ├── packaging/AppIcon.png         # 应用图标源图（1024×1024，macOS 图标网格）
 └── scripts/{build,run,package,dev}.sh
@@ -110,7 +128,7 @@ kacha/
 ### 4.2 冻结观感
 
 macOS 自带截图「画面冻住」是因为它**先抓后显**。本工具同法：热键 → 抓所有屏 →
-覆盖层的 `NSPanel` 把冻帧作为背景（1:1，无缩放），上面叠一个透明 `SelectionView` 画
+覆盖层的 `NSPanel` 把冻帧作为背景（1:1，无缩放），上面叠一个透明的覆盖层视图画
 遮罩 / 选区 / 手柄 / 十字线 / 尺寸读数。
 
 ### 4.3 多显示器与坐标系
@@ -130,7 +148,7 @@ final class CaptureSession {
     private(set) var displays: [CGDirectDisplayID: CapturedDisplay]  // 冻帧 + 几何
     var mode: OverlayMode          // .capture / .colorPicker
     var selection: CGRect?         // 全局逻辑点
-    var composed: ComposedImage?   // 确认后裁剪出的合成图（CGImage + RGBA8）
+    var composed: ComposedImage?   // 确认后裁剪出的合成图（CGImage + 惰性 RGBA8）
     var hover: CGRect?             // 鼠标下的窗口（全局逻辑点）
 }
 ```
@@ -139,7 +157,7 @@ final class CaptureSession {
 
 ### 4.5 统一覆盖层（区域 / 窗口 / 整屏）
 
-一个 `SelectionView` 同时处理三种目标，用「点击 vs 拖拽」区分：
+一个 `CaptureSelectionView` 同时处理三种目标，用「点击 vs 拖拽」区分：
 
 - 按下后位移 < `clickSlop`（4pt）→ 视为**点击**：鼠标下有窗口就选该窗口，否则选整屏。
 - 位移超过阈值 → 视为**拖拽**：进入矩形圈选，画手柄，`Enter` 确认。
@@ -152,8 +170,9 @@ final class CaptureSession {
 ### 4.6 合成与导出
 
 `Compose.compose(displayList, selection:)` 把选区从各屏冻帧裁出拼成一张图：输出 scale 跟随
-选区左上角所在显示器，常见情况是精确 1:1；跨 DPI 时取最大 scale。结果同时保留 `CGImage`
-（画布用）与紧凑 RGBA8（马赛克取样用）。PNG 导出走 ImageIO，颜色由 Core Graphics 管理。
+选区左上角所在显示器，常见情况是精确 1:1；跨 DPI 时取最大 scale。结果保留 `CGImage`
+（画布用）；紧凑 RGBA8（马赛克取样用）按需惰性栅格化并缓存。PNG 导出走 ImageIO，颜色由
+Core Graphics 管理。
 
 ### 4.7 编辑器画布
 
