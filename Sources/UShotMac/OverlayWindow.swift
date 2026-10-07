@@ -122,7 +122,7 @@ final class SelectionView: NSView {
             drawSelection(ctx, local, viewport: viewport)
         }
         drawCrosshair(ctx, viewport: viewport)
-        drawHint(ctx, viewport: viewport)
+        drawHint(ctx, viewport: viewport, hasSelection: session.selection != nil)
     }
 
     /// The selection border, handles and size label.
@@ -165,9 +165,12 @@ final class SelectionView: NSView {
         ctx.fill(CGRect(x: 0, y: p.y, width: viewport.width, height: 1))
     }
 
-    /// The bottom-centre instruction pill: confirm / full-screen / cancel.
-    private func drawHint(_ ctx: CGContext, viewport: CGRect) {
-        let text = "Enter 完成 · 点击空白处截全屏 · Esc 取消"
+    /// The bottom-centre instruction pill. The text reflects the current step so
+    /// the two-level back (clear selection, then cancel) is explicit.
+    private func drawHint(_ ctx: CGContext, viewport: CGRect, hasSelection: Bool) {
+        let text = hasSelection
+            ? "Enter 完成 · 右键 / Esc 重新选择 · 点击空白处截全屏"
+            : "拖拽框选 · 点击窗口截窗口 · 点击空白处截全屏 · Esc 取消"
         let attributed = NSAttributedString(
             string: text,
             attributes: [
@@ -304,6 +307,27 @@ final class SelectionView: NSView {
         needsDisplay = true
     }
 
+    override func rightMouseDown(with event: NSEvent) {
+        if session.mode == .capture {
+            back()
+        } else {
+            super.rightMouseDown(with: event)
+        }
+    }
+
+    /// Back one step: drop a settled selection and return to window / full-screen
+    /// picking; with no selection, cancel the whole capture.
+    private func back() {
+        if session.selection != nil {
+            session.selection = nil
+            drag = .none
+            didDrag = false
+            needsDisplay = true
+        } else {
+            controller?.cancel()
+        }
+    }
+
     // MARK: - Keyboard
 
     override func keyDown(with event: NSEvent) {
@@ -329,7 +353,7 @@ final class SelectionView: NSView {
         }
         switch event.keyCode {
         case 53:  // Escape
-            controller?.cancel()
+            back()
         case 36, 76:  // Return / keypad Enter
             controller?.confirm()
         case 123, 124, 125, 126:  // arrows

@@ -143,6 +143,8 @@ final class CaptureSession {
 - 位移超过阈值 → 视为**拖拽**：进入矩形圈选，画手柄，`Enter` 确认。
 - 未开始时高亮鼠标下的窗口（用 `NSWindow.windowNumber(at:belowWindowWithWindowNumber:)`
   命中测试，考虑真实 z-order / 遮挡）。
+- **两级返回**：有选区时右键 / `Esc` 只清掉选区、回到上面这一步（重新选窗口 / 整屏）；没有
+  选区时才 `cancel()` 整个截图。底部提示随「有无选区」换文案，让回退可见。
 
 ### 4.6 合成与导出
 
