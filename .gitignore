@@ -5,6 +5,9 @@
 # Packaged app.
 /dist/
 
+# Generated app icon（由 packaging/AppIcon.png 经 scripts/make-icon.sh 生成）。
+/packaging/ushot.icns
+
 # Editors / tooling.
 /.vscode/
 /.idea/

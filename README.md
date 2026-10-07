@@ -59,7 +59,9 @@ Sources/UShotMac/
   SelfCheck.swift         `--selfcheck` 纯逻辑断言
 
 packaging/Info.plist      LSUIElement=true、LSMinimumSystemVersion=14.0
-scripts/{build,run,package}.sh
+packaging/AppIcon.png     应用图标源图（1024×1024，macOS 图标网格）
+scripts/{build,run,package,dev}.sh
+scripts/make-icon.sh      由 AppIcon.png 生成 .icns（打包时自动调用）
 ```
 
 ## 构建 / 运行
@@ -69,7 +71,7 @@ scripts/build.sh                 # swift build
 scripts/run.sh                   # 构建并运行（菜单栏，无窗口）
 scripts/run.sh --smoke-editor    # 开/关编辑窗，走 AppKit 真实关闭路径
 scripts/run.sh --smoke-export    # 注入合成图 → 编辑 → 复制到剪贴板
-scripts/package.sh [--open]      # 组装并 ad-hoc 签名 dist/ushot.app
+scripts/package.sh [--open]      # 组装并 ad-hoc 签名 dist/ushot.app（含图标）
 
 ./scripts/dev.sh                 # build + selfcheck + settings/editor/export smoke
 ```

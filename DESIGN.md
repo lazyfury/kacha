@@ -90,7 +90,9 @@ ushot/
 │   ├── PNG.swift                 # ImageIO PNG 编码
 │   └── SelfCheck.swift           # --selfcheck 纯逻辑断言
 ├── packaging/Info.plist          # LSUIElement=true、LSMinimumSystemVersion=14.0
+├── packaging/AppIcon.png         # 应用图标源图（1024×1024，macOS 图标网格）
 └── scripts/{build,run,package,dev}.sh
+    scripts/make-icon.sh          # AppIcon.png → dist/ushot.app/Contents/Resources/ushot.icns
 ```
 
 ---

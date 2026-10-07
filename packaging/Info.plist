@@ -8,6 +8,8 @@
 	<string>ushot</string>
 	<key>CFBundleExecutable</key>
 	<string>ushot-mac</string>
+	<key>CFBundleIconFile</key>
+	<string>ushot</string>
 	<key>CFBundleIdentifier</key>
 	<string>com.ushot.app</string>
 	<key>CFBundleInfoDictionaryVersion</key>
