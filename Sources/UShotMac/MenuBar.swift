@@ -5,21 +5,28 @@ import AppKit
 final class MenuBar {
     private let statusItem: NSStatusItem
     private let onCapture: () -> Void
+    private let onFullScreen: () -> Void
     private let onPicker: () -> Void
     private let onSettings: () -> Void
+    private let onClosePins: () -> Void
     private let onQuit: () -> Void
     private var captureItem: NSMenuItem?
+    private var fullScreenItem: NSMenuItem?
     private var pickerItem: NSMenuItem?
 
     init(
         onCapture: @escaping () -> Void,
+        onFullScreen: @escaping () -> Void,
         onPicker: @escaping () -> Void,
         onSettings: @escaping () -> Void,
+        onClosePins: @escaping () -> Void,
         onQuit: @escaping () -> Void
     ) {
         self.onCapture = onCapture
+        self.onFullScreen = onFullScreen
         self.onPicker = onPicker
         self.onSettings = onSettings
+        self.onClosePins = onClosePins
         self.onQuit = onQuit
         self.statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
     }
@@ -40,12 +47,29 @@ final class MenuBar {
         menu.addItem(capture)
         self.captureItem = capture
 
+        let fullScreen = NSMenuItem(
+            title: "全屏截图",
+            action: #selector(fullScreenClicked),
+            keyEquivalent: ""
+        )
+        fullScreen.target = self
+        menu.addItem(fullScreen)
+        self.fullScreenItem = fullScreen
+
         let picker = NSMenuItem(title: "取色器", action: #selector(pickerClicked), keyEquivalent: "")
         picker.target = self
         menu.addItem(picker)
         self.pickerItem = picker
 
         menu.addItem(.separator())
+        let closePins = NSMenuItem(
+            title: "关闭所有钉图",
+            action: #selector(closePinsClicked),
+            keyEquivalent: ""
+        )
+        closePins.target = self
+        menu.addItem(closePins)
+
         let settings = NSMenuItem(title: "设置…", action: #selector(settingsClicked), keyEquivalent: ",")
         settings.keyEquivalentModifierMask = [.command]
         settings.target = self
@@ -63,6 +87,7 @@ final class MenuBar {
     /// Show the current shortcuts next to the menu items.
     func updateShortcuts() {
         apply(Preferences.captureHotkey, to: captureItem)
+        apply(Preferences.fullScreenHotkey, to: fullScreenItem)
         apply(Preferences.pickerHotkey, to: pickerItem)
     }
 
@@ -78,7 +103,9 @@ final class MenuBar {
     }
 
     @objc private func captureClicked() { onCapture() }
+    @objc private func fullScreenClicked() { onFullScreen() }
     @objc private func pickerClicked() { onPicker() }
     @objc private func settingsClicked() { onSettings() }
+    @objc private func closePinsClicked() { onClosePins() }
     @objc private func quitClicked() { onQuit() }
 }

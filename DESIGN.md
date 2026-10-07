@@ -182,6 +182,13 @@ marker 工具，用 `defaultMarkerStroke`（最小 16px）的粗笔刷。
 - **设置窗**：SwiftUI 表单装在半透明玻璃卡片里；热键录制器仍是 AppKit（`NSButton` +
   本地 `NSEvent` 监听），通过 representable 嵌入。
 
+### 4.9 钉图
+
+钉图是 `PinWindow`（borderless + `.floating`）里放 `PinView`：静态画 `NSImage`，悬停才在
+左上角画关闭按钮。交互全在 `PinView`：拖拽改窗口 origin、双击 / `Esc` 关闭、右键菜单
+（复制 / 保存 / 关闭）；大图按屏幕 80% 缩放，窗口用 `orderFrontRegardless()` 展示以免抢焦点。
+菜单栏提供「关闭所有钉图」。
+
 ---
 
 ## 5. 数据流（时序）

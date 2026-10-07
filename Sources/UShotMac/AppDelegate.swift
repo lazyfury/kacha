@@ -30,8 +30,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let menuBar = MenuBar(
             onCapture: { [weak self] in self?.startCapture() },
+            onFullScreen: { [weak self] in self?.startFullScreenCapture() },
             onPicker: { [weak self] in self?.startColorPicker() },
             onSettings: { [weak self] in self?.settings.show() },
+            onClosePins: { [weak self] in self?.pins.closeAll() },
             onQuit: { NSApp.terminate(nil) }
         )
         menuBar.install()
