@@ -24,8 +24,6 @@ final class CaptureSession {
     var hover: CGRect?
     /// Whether the overlay is in window-pick mode.
     var pickMode = false
-    /// Set when a window was clicked; the shell captures it.
-    var picked = false
 
     func setDisplay(_ display: CapturedDisplay) {
         displays[display.displayID] = display

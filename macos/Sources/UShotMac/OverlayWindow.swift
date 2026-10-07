@@ -23,6 +23,14 @@ final class SelectionView: NSView {
 
     private var drag: Selection.Drag = .none
     private var pointer: CGPoint?
+    /// The pointer-down point (global logical), for click-vs-drag.
+    private var anchor: CGPoint = .zero
+    /// Set once the pointer moved past `clickSlop` since mouse-down.
+    private var didDrag = false
+
+    /// A pointer that moved less than this (logical points) is a click, not a
+    /// drag — the click-vs-region discrimination.
+    private static let clickSlop: CGFloat = 4
 
     private static let dim = NSColor(calibratedWhite: 0, alpha: 0.45).cgColor
     private static let accent = NSColor(calibratedRed: 0.16, green: 0.55, blue: 1, alpha: 1).cgColor
@@ -41,6 +49,21 @@ final class SelectionView: NSView {
     override var isFlipped: Bool { true }
     override var acceptsFirstResponder: Bool { true }
 
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        for area in trackingAreas {
+            removeTrackingArea(area)
+        }
+        addTrackingArea(
+            NSTrackingArea(
+                rect: .zero,
+                options: [.mouseMoved, .mouseEnteredAndExited, .activeAlways, .inVisibleRect],
+                owner: self,
+                userInfo: nil
+            )
+        )
+    }
+
     /// Local (top-left) point → global logical point.
     private func global(_ local: CGPoint) -> CGPoint {
         CGPoint(x: local.x + display.origin.x, y: local.y + display.origin.y)
@@ -55,38 +78,52 @@ final class SelectionView: NSView {
         if session.pickMode {
             drawPick(ctx, viewport: viewport)
         } else {
-            drawRegion(ctx, viewport: viewport)
+            drawUnified(ctx, viewport: viewport)
         }
     }
 
-    private func drawRegion(_ ctx: CGContext, viewport: CGRect) {
+    /// Unified region overlay: a settled selection wins; otherwise the window
+    /// under the cursor is highlighted, and a click captures it (a click on the
+    /// desktop captures the whole display).
+    private func drawUnified(_ ctx: CGContext, viewport: CGRect) {
         let local = session.selection.map { Selection.toLocal($0, origin: display.origin) }
-
-        // Dim only once the region is settled: not before the first drag starts,
-        // and not while a new region is still being drawn.
         let settled = local != nil && !isNewDrag
+
         if settled, let local {
             fillMask(ctx, selection: local, viewport: viewport)
-        }
-        if let local {
+            drawSelection(ctx, local, viewport: viewport)
+        } else if !isNewDrag, let hover = session.hover {
+            let hoverLocal = Selection.toLocal(hover, origin: display.origin)
+            fillMask(ctx, selection: hoverLocal, viewport: viewport)
             ctx.setStrokeColor(Self.accent)
-            ctx.setLineWidth(1)
-            ctx.stroke(local)
-            ctx.setFillColor(Self.accent)
-            for (_, center) in Selection.handleCenters(local) {
-                let handle = CGRect(
-                    x: center.x - Selection.handleSize / 2,
-                    y: center.y - Selection.handleSize / 2,
-                    width: Selection.handleSize,
-                    height: Selection.handleSize
-                )
-                if handle.intersects(viewport) {
-                    ctx.fill(handle)
-                }
-            }
-            drawLabel(ctx, sizeText(local), near: local, viewport: viewport)
+            ctx.setLineWidth(2)
+            ctx.stroke(Selection.intersection(hoverLocal, viewport) ?? hoverLocal)
+            drawLabel(ctx, sizeText(hoverLocal), near: hoverLocal, viewport: viewport)
+        } else if let local {
+            // A new region is being drawn: keep the screen bright, just outline.
+            drawSelection(ctx, local, viewport: viewport)
         }
         drawCrosshair(ctx, viewport: viewport)
+    }
+
+    /// The selection border, handles and size label.
+    private func drawSelection(_ ctx: CGContext, _ local: CGRect, viewport: CGRect) {
+        ctx.setStrokeColor(Self.accent)
+        ctx.setLineWidth(1)
+        ctx.stroke(local)
+        ctx.setFillColor(Self.accent)
+        for (_, center) in Selection.handleCenters(local) {
+            let handle = CGRect(
+                x: center.x - Selection.handleSize / 2,
+                y: center.y - Selection.handleSize / 2,
+                width: Selection.handleSize,
+                height: Selection.handleSize
+            )
+            if handle.intersects(viewport) {
+                ctx.fill(handle)
+            }
+        }
+        drawLabel(ctx, sizeText(local), near: local, viewport: viewport)
     }
 
     private func drawPick(_ ctx: CGContext, viewport: CGRect) {
@@ -159,12 +196,14 @@ final class SelectionView: NSView {
         pointer = local
         if session.pickMode {
             if session.hover != nil {
-                session.picked = true
-                controller?.pick()
+                controller?.pickHovered()
             }
             return
         }
-        let (drag, selection) = Selection.begin(current: session.selection, at: global(local))
+        let point = global(local)
+        anchor = point
+        didDrag = false
+        let (drag, selection) = Selection.begin(current: session.selection, at: point)
         self.drag = drag
         session.selection = selection
         needsDisplay = true
@@ -177,22 +216,42 @@ final class SelectionView: NSView {
             controller?.updateHover(at: NSEvent.mouseLocation)
             return
         }
-        session.selection = Selection.update(drag, to: global(local), current: session.selection)
+        let point = global(local)
+        if !didDrag {
+            let dx = point.x - anchor.x
+            let dy = point.y - anchor.y
+            if (dx * dx + dy * dy).squareRoot() >= Self.clickSlop {
+                didDrag = true
+            }
+        }
+        session.selection = Selection.update(drag, to: point, current: session.selection)
         needsDisplay = true
     }
 
     override func mouseUp(with event: NSEvent) {
         if session.pickMode { return }
+        let wasNew: Bool
+        if case .new = drag { wasNew = true } else { wasNew = false }
+        let usable = session.selection.map { Selection.usable($0) } ?? false
+
+        if wasNew && (!didDrag || !usable) {
+            // A click: drop the stray rect and act on whatever is under the
+            // cursor — a window (capture it) or the desktop (capture the screen).
+            session.selection = nil
+            drag = .none
+            didDrag = false
+            controller?.click(at: NSEvent.mouseLocation, display: display)
+            return
+        }
         session.selection = Selection.finish(drag, current: session.selection)
         drag = .none
+        didDrag = false
         needsDisplay = true
     }
 
     override func mouseMoved(with event: NSEvent) {
         pointer = convert(event.locationInWindow, from: nil)
-        if session.pickMode {
-            controller?.updateHover(at: NSEvent.mouseLocation)
-        }
+        controller?.updateHover(at: NSEvent.mouseLocation)
         needsDisplay = true
     }
 
@@ -320,10 +379,34 @@ final class OverlayController {
         refresh()
     }
 
-    func pick() {
-        guard let session, let window = hoveredWindow else { return }
+    func pickHovered() {
+        guard let window = hoveredWindow else { return }
+        pick(window)
+    }
+
+    /// A click in unified mode: a window under the cursor is captured, otherwise
+    /// the whole display the click landed on.
+    func click(at point: CGPoint, display: CapturedDisplay) {
+        if let window = windowUnder(point) {
+            pick(window)
+        } else {
+            captureFullScreen(display)
+        }
+    }
+
+    func pick(_ window: SCWindow) {
+        guard let session else { return }
+        hoveredWindow = window
         dismiss()
         onPick?(session, window)
+    }
+
+    /// Capture the whole display from its frozen frame.
+    func captureFullScreen(_ display: CapturedDisplay) {
+        guard let session else { return }
+        session.composed = Compose.composed(from: display.image)
+        dismiss()
+        onConfirm?(session)
     }
 
     func confirm() {
