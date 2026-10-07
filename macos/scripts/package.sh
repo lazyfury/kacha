@@ -1,13 +1,12 @@
 #!/usr/bin/env bash
 #
-# Packages the Swift/macOS host as a `.app`.
+# Packages the pure-Swift app as a `.app`.
 #
 #     macos/scripts/package.sh          # release build, then assemble dist/
 #     macos/scripts/package.sh --open   # ... and launch it afterwards
 #
-# The Rust host is linked **statically** into the Swift binary, so the bundle is
-# self-contained (it needs no repo checkout and no dylibs):
-#   Contents/MacOS/ushot-mac   the app (Swift + Rust)
+# The whole app is Swift, so the bundle is self-contained:
+#   Contents/MacOS/ushot-mac   the app
 #   Contents/Info.plist        LSUIElement (menu-bar app)
 #
 # `codesign` is ad-hoc (`-`), enough for a locally built app to launch. Screen
@@ -38,11 +37,8 @@ if [ "$(uname -s)" != "Darwin" ]; then
 	exit 1
 fi
 
-echo "==> cargo build --release"
-cargo build --release --manifest-path "$ROOT/Cargo.toml"
-
 echo "==> swift build -c release"
-USHOT_RUST_PROFILE=release swift build --package-path "$ROOT/macos" -c release
+swift build --package-path "$ROOT/macos" -c release
 
 BUILT_SWIFT="$ROOT/macos/.build/release/$BINARY"
 if [ ! -f "$BUILT_SWIFT" ]; then

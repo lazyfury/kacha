@@ -1,23 +1,32 @@
 #!/usr/bin/env bash
-# Build the Rust FFI library, then the Swift executable.
+# Build the pure-Swift executable.
 #
 #   macos/scripts/build.sh              # debug
-#   USHOT_RUST_PROFILE=release macos/scripts/build.sh
+#   macos/scripts/build.sh --release    # release
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-PROFILE="${USHOT_RUST_PROFILE:-debug}"
-# Match the Swift package's deployment target so the staticlib's objects are
-# not built for a newer SDK than the app links against.
 export MACOSX_DEPLOYMENT_TARGET="${MACOSX_DEPLOYMENT_TARGET:-14.0}"
 
+PROFILE="debug"
+CONFIG=()
+for arg in "$@"; do
+    case "$arg" in
+        --release)
+            PROFILE="release"
+            CONFIG=(-c release)
+            ;;
+        *)
+            echo "unknown flag: $arg（用法：build.sh [--release]）" >&2
+            exit 2
+            ;;
+    esac
+done
+
 cd "$ROOT"
-if [[ "$PROFILE" == "release" ]]; then
-    cargo build --release
-    swift build --package-path macos -c release
+if [ "${#CONFIG[@]}" -gt 0 ]; then
+    swift build --package-path macos "${CONFIG[@]}"
 else
-    cargo build
     swift build --package-path macos
 fi
-
 echo "built: $ROOT/macos/.build/$PROFILE/ushot-mac"

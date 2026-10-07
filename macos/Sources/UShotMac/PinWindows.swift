@@ -1,7 +1,7 @@
 // "Pin to screen": floating, always-on-top windows showing an exported image.
 //
 // A pinned image is a static bitmap, so an `NSImageView` is enough — the pixels
-// still come from Rust (the editor's PNG).
+// still come from the editor's PNG.
 
 import AppKit
 
