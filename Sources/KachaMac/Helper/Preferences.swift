@@ -92,6 +92,34 @@ enum Preferences {
         set { defaults.set(newValue, forKey: "playSound") }
     }
 
+    /// The folder a capture is saved into without a panel, or nil to always ask.
+    /// Stored as a bookmark (not a raw path) so it survives the folder being
+    /// renamed or moved.
+    static var saveDirectory: URL? {
+        get {
+            guard let data = defaults.data(forKey: "saveDirectoryBookmark") else { return nil }
+            var stale = false
+            return try? URL(
+                resolvingBookmarkData: data,
+                options: [],
+                relativeTo: nil,
+                bookmarkDataIsStale: &stale
+            )
+        }
+        set {
+            guard let newValue else {
+                defaults.removeObject(forKey: "saveDirectoryBookmark")
+                return
+            }
+            let data = try? newValue.bookmarkData(
+                options: [],
+                includingResourceValuesForKeys: nil,
+                relativeTo: nil
+            )
+            defaults.set(data, forKey: "saveDirectoryBookmark")
+        }
+    }
+
     private static func hotkey(_ name: String, fallback: Hotkey) -> Hotkey {
         guard
             let code = defaults.object(forKey: "\(name)KeyCode") as? Int,

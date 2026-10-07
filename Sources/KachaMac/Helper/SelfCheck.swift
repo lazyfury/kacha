@@ -23,6 +23,7 @@ enum SelfCheck {
         checkAnnotations(check)
         checkSymbols(check)
         checkHotkeys(check)
+        checkExport(check)
         checkOCR(check)
         checkSound(check)
 
@@ -281,6 +282,27 @@ enum SelfCheck {
         }
         let arrow = Hotkey(keyCode: 123, modifiers: [.command], keyLabel: "←")
         check(arrow.menuKeyEquivalent == nil, "non-alphanumeric labels have no menu equivalent")
+    }
+
+    /// Save names must never collide when writing straight into a directory.
+    private static func checkExport(_ check: (Bool, String) -> Void) {
+        check(
+            Export.deduplicatedName("kacha.png", existing: []) == "kacha.png",
+            "a free save name is unchanged"
+        )
+        check(
+            Export.deduplicatedName("kacha.png", existing: ["kacha.png"]) == "kacha 2.png",
+            "a taken save name gets a numeric suffix"
+        )
+        check(
+            Export.deduplicatedName("kacha.png", existing: ["kacha.png", "kacha 2.png"])
+                == "kacha 3.png",
+            "the suffix keeps counting past the first collision"
+        )
+        check(
+            Export.timestampedName().hasPrefix("kacha-") && Export.timestampedName().hasSuffix(".png"),
+            "the timestamped name is a kacha PNG"
+        )
     }
 
     /// `joinLines` keeps or drops the visual line breaks for the OCR sheet.

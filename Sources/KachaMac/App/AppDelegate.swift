@@ -55,6 +55,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             ShotSound.playIfEnabled()
             self?.editor.show(session: session)
         }
+        overlays.onSave = { [weak self] session in
+            ShotSound.playIfEnabled()
+            self?.saveSession(session)
+        }
         overlays.onCancel = { _ in }
         overlays.onPick = { [weak self] session, window in
             self?.captureWindow(window, session: session)
@@ -258,6 +262,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 self.presentCaptureError(error)
             }
         }
+    }
+
+    /// Save a confirmed capture. With a save directory configured (Settings) the
+    /// PNG is written straight there; otherwise a save panel is shown.
+    private func saveSession(_ session: CaptureSession) {
+        guard
+            let image = session.composed?.image,
+            let data = PNG.encode(image)
+        else {
+            return
+        }
+        Export.savePNG(
+            data,
+            suggestedName: Export.timestampedName(),
+            directory: Preferences.saveDirectory
+        )
     }
 
     private func presentPermissionAlert() {

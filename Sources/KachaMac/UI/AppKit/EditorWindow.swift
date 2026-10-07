@@ -97,18 +97,16 @@ final class EditorWindow: NSObject, NSWindowDelegate {
 
     private func saveImage() {
         guard let data = canvas?.renderExport() else { return }
-        Export.savePNG(data, suggestedName: Self.timestamp() + ".png")
+        Export.savePNG(
+            data,
+            suggestedName: Export.timestampedName(),
+            directory: Preferences.saveDirectory
+        )
     }
 
     private func pinImage() {
         guard let data = canvas?.renderExport() else { return }
         pins.pin(data)
-    }
-
-    private static func timestamp() -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyyMMdd-HHmmss"
-        return "kacha-" + formatter.string(from: Date())
     }
 
     // MARK: - Teardown

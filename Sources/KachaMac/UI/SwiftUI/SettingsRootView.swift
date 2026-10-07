@@ -16,6 +16,7 @@ struct SettingsRootView: View {
     @State private var fullScreenHotkey = Preferences.fullScreenHotkey
     @State private var launchAtLogin = LaunchAtLogin.isEnabled
     @State private var playSound = Preferences.playSound
+    @State private var saveDirectory = Preferences.saveDirectory
 
     private var loginAvailable: Bool { LaunchAtLogin.isAvailable }
 
@@ -36,6 +37,30 @@ struct SettingsRootView: View {
                     }
                     hotkeyRow("取色器", hotkey: $pickerHotkey) {
                         Preferences.pickerHotkey = $0
+                    }
+                }
+
+                Section {
+                    sectionHeader(
+                        "保存",
+                        "设好目录后，截图会直接存到这里；未设置时每次弹出保存面板。"
+                    )
+                    LabeledContent {
+                        HStack(spacing: 8) {
+                            Button("选择…", action: chooseSaveDirectory)
+                            if saveDirectory != nil {
+                                Button("清除", action: clearSaveDirectory)
+                            }
+                        }
+                    } label: {
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("保存目录")
+                            Text(saveDirectory?.path ?? "每次询问")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                        }
                     }
                 }
 
@@ -176,6 +201,25 @@ struct SettingsRootView: View {
         Preferences.pickerHotkey = .pickerDefault
         Preferences.fullScreenHotkey = .fullScreenDefault
         onHotkeyChange()
+    }
+
+    /// Pick the folder captures save into directly.
+    private func chooseSaveDirectory() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.canCreateDirectories = true
+        panel.prompt = "选择"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        Preferences.saveDirectory = url
+        saveDirectory = url
+    }
+
+    /// Go back to asking for a location on every save.
+    private func clearSaveDirectory() {
+        Preferences.saveDirectory = nil
+        saveDirectory = nil
     }
 
     private func showHelp() {

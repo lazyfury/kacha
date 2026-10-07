@@ -129,6 +129,9 @@ final class CaptureSelectionView: OverlaySurfaceView {
         }
         drawCrosshair(ctx, viewport: viewport)
         drawHint(ctx, viewport: viewport, hasSelection: session.selection != nil)
+        if settled, let local, bounds.contains(CGPoint(x: local.midX, y: local.midY)) {
+            drawActions(ctx, selection: local, viewport: viewport)
+        }
     }
 
     /// The selection border, handles and size label.
@@ -205,6 +208,120 @@ final class CaptureSelectionView: OverlaySurfaceView {
         "\(Int(rect.width.rounded())) × \(Int(rect.height.rounded()))"
     }
 
+    // MARK: - Quick actions
+
+    /// A one-click action shown next to a settled selection.
+    private enum QuickAction {
+        case cancel
+        case save
+        case confirm
+    }
+
+    private struct QuickButton {
+        let title: String
+        let action: QuickAction
+        let primary: Bool
+    }
+
+    private static let quickButtons: [QuickButton] = [
+        QuickButton(title: "取消", action: .cancel, primary: false),
+        QuickButton(title: "直接保存", action: .save, primary: false),
+        QuickButton(title: "去编辑", action: .confirm, primary: true),
+    ]
+
+    /// The action bar's rect and each button's frame, in local coordinates.
+    /// Anchored just below the selection (or above / at the bottom edge when
+    /// there is no room), clamped to the display.
+    private func actionLayout(
+        selection: CGRect,
+        viewport: CGRect
+    ) -> (bar: CGRect, buttons: [(QuickAction, CGRect)])? {
+        guard Selection.intersection(selection, viewport) != nil else { return nil }
+
+        let buttonHeight: CGFloat = 28
+        let hPadding: CGFloat = 14
+        let spacing: CGFloat = 8
+        let padding: CGFloat = 6
+        let margin: CGFloat = 8
+        let font = NSFont.systemFont(ofSize: 13, weight: .medium)
+
+        let widths = Self.quickButtons.map { button -> CGFloat in
+            let text = NSAttributedString(string: button.title, attributes: [.font: font])
+            return max(text.size().width + hPadding * 2, 54)
+        }
+        let contentWidth = widths.reduce(0, +)
+            + spacing * CGFloat(Self.quickButtons.count - 1)
+        let barWidth = contentWidth + padding * 2
+        let barHeight = buttonHeight + padding * 2
+
+        var x = selection.midX - barWidth / 2
+        x = min(max(x, viewport.minX + margin), viewport.maxX - barWidth - margin)
+        var y = selection.maxY + margin
+        if y + barHeight > viewport.maxY - margin {
+            y = selection.minY - barHeight - margin
+        }
+        if y < viewport.minY + margin {
+            y = viewport.maxY - barHeight - margin
+        }
+
+        let bar = CGRect(x: x, y: y, width: barWidth, height: barHeight)
+        var buttons: [(QuickAction, CGRect)] = []
+        var cursor = bar.minX + padding
+        for (index, button) in Self.quickButtons.enumerated() {
+            let frame = CGRect(
+                x: cursor,
+                y: bar.minY + padding,
+                width: widths[index],
+                height: buttonHeight
+            )
+            buttons.append((button.action, frame))
+            cursor += widths[index] + spacing
+        }
+        return (bar, buttons)
+    }
+
+    private func drawActions(_ ctx: CGContext, selection: CGRect, viewport: CGRect) {
+        guard let layout = actionLayout(selection: selection, viewport: viewport) else { return }
+        ctx.setFillColor(NSColor(calibratedWhite: 0.08, alpha: 0.92).cgColor)
+        ctx.addPath(
+            CGPath(roundedRect: layout.bar, cornerWidth: 10, cornerHeight: 10, transform: nil)
+        )
+        ctx.fillPath()
+
+        for (index, entry) in layout.buttons.enumerated() {
+            let (_, frame) = entry
+            let button = Self.quickButtons[index]
+            ctx.setFillColor(
+                button.primary ? Self.accent : NSColor(calibratedWhite: 1, alpha: 0.16).cgColor
+            )
+            ctx.addPath(
+                CGPath(roundedRect: frame, cornerWidth: 7, cornerHeight: 7, transform: nil)
+            )
+            ctx.fillPath()
+
+            let attributed = NSAttributedString(
+                string: button.title,
+                attributes: [
+                    .font: NSFont.systemFont(ofSize: 13, weight: .medium),
+                    .foregroundColor: NSColor.white,
+                ]
+            )
+            let size = attributed.size()
+            attributed.draw(
+                at: CGPoint(x: frame.midX - size.width / 2, y: frame.midY - size.height / 2)
+            )
+        }
+    }
+
+    /// Run a quick action from the bar.
+    private func perform(_ action: QuickAction) {
+        switch action {
+        case .cancel: controller?.cancel()
+        case .save: controller?.save()
+        case .confirm: controller?.confirm()
+        }
+    }
+
     private func drawLabel(_ ctx: CGContext, _ text: String, near sel: CGRect, viewport: CGRect) {
         let attributed = NSAttributedString(
             string: text,
@@ -233,6 +350,18 @@ final class CaptureSelectionView: OverlaySurfaceView {
     override func mouseDown(with event: NSEvent) {
         let local = convert(event.locationInWindow, from: nil)
         pointer = local
+        // A click on the quick-action bar wins over starting a new drag.
+        if let selection = session.selection {
+            let localSelection = Selection.toLocal(selection, origin: display.origin)
+            if bounds.contains(CGPoint(x: localSelection.midX, y: localSelection.midY)),
+                let layout = actionLayout(selection: localSelection, viewport: bounds)
+            {
+                for (index, entry) in layout.buttons.enumerated() where entry.1.contains(local) {
+                    perform(Self.quickButtons[index].action)
+                    return
+                }
+            }
+        }
         let point = global(local)
         anchor = point
         didDrag = false
@@ -402,6 +531,7 @@ final class OverlayController {
 
     var onConfirm: ((CaptureSession) -> Void)?
     var onCancel: ((CaptureSession) -> Void)?
+    var onSave: ((CaptureSession) -> Void)?
     var onPick: ((CaptureSession, SCWindow) -> Void)?
 
     /// Open one panel per display, over `session`'s frozen frames.
@@ -519,6 +649,14 @@ final class OverlayController {
         session.confirm()
         dismiss()
         onConfirm?(session)
+    }
+
+    /// Confirm the selection and save it without opening the editor.
+    func save() {
+        guard let session else { return }
+        session.confirm()
+        dismiss()
+        onSave?(session)
     }
 
     func cancel() {
