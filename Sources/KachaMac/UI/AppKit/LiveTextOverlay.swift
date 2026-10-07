@@ -45,6 +45,9 @@ final class LiveTextOverlay: NSView {
     func analyze() async {
         guard let analysis = await OCR.analyze(sourceImage) else { return }
         overlayView.analysis = analysis
+        // Auto-activate: highlight the recognized items so they are immediately
+        // selectable, without first clicking the system Live Text button.
+        overlayView.selectableItemsHighlighted = true
     }
 }
 

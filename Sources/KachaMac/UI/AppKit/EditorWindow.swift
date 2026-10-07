@@ -20,16 +20,16 @@ final class EditorWindow: NSObject, NSWindowDelegate {
 
     /// Open an editor for `session` (the composed image lives in it).
     func show(session: CaptureSession) {
-        open(session: session, title: "kacha — 编辑")
+        open(session: session, title: "kacha — 编辑", autoLiveText: false)
     }
 
     /// Open an empty editor. The tools stay disabled until an image is dropped
-    /// in; after that the flow is identical to the capture editor.
+    /// in; once loaded, text recognition activates automatically.
     func showViewer() {
-        open(session: CaptureSession(), title: "kacha — 看图")
+        open(session: CaptureSession(), title: "kacha — 看图", autoLiveText: true)
     }
 
-    private func open(session: CaptureSession, title: String) {
+    private func open(session: CaptureSession, title: String, autoLiveText: Bool) {
         close()
 
         let composed = session.composed
@@ -46,6 +46,7 @@ final class EditorWindow: NSObject, NSWindowDelegate {
             state.textSize = defaultTextSize((composed.width, composed.height))
         }
         state.hasImage = composed != nil
+        state.autoLiveText = autoLiveText
         self.state = state
         self.session = session
 

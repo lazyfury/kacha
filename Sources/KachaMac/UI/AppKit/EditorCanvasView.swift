@@ -289,6 +289,9 @@ final class EditorCanvasView: NSView, NSTextFieldDelegate {
         state.textSize = defaultTextSize((composed.width, composed.height))
         state.hasImage = true
         needsDisplay = true
+        if state.autoLiveText {
+            setLiveText(active: true)
+        }
     }
 
     // MARK: - Drag & drop

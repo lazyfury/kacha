@@ -17,6 +17,8 @@ final class EditorState: ObservableObject {
     @Published var liveTextActive = false
     /// Whether an image is loaded (false for the empty viewer window).
     @Published var hasImage = false
+    /// When true (the viewer), activate text selection as soon as an image loads.
+    var autoLiveText = false
     /// Font size in image pixels, for the text tool.
     var textSize: CGFloat = 18
     @Published var annotations: [Annotation] = []
