@@ -1,0 +1,65 @@
+[workspace]
+resolver = "2"
+
+# ---------------------------------------------------------------------------
+# ushot — a macOS screenshot tool whose UI is drawn by igui. The product is a
+# Swift/macOS app (`macos/`); this Rust package owns the UI, the wgpu renderer
+# and all image work, and is linked into the Swift shell as a static library
+# through the `ushot_host_*` C ABI (see `include/ushot_host.h`).
+#
+# Layout mirrors `../classic-game-box`: the Swift shell owns the window /
+# `CAMetalLayer` / native events, Rust owns the UI and the rendering.
+# ---------------------------------------------------------------------------
+
+[package]
+name = "ushot-app"
+description = "ushot: the app library (UI + capture + editor) embedded by the native macOS host."
+version = "0.1.0"
+edition = "2021"
+# `wgpu` 24 and igui require Rust 1.76.
+rust-version = "1.86"
+license = "MIT"
+
+[lib]
+# `lib` for normal Rust consumers (tests / benches); `staticlib`
+# (`libushot_app.a`) is what the Swift host links. Both build from the same
+# crate.
+crate-type = ["lib", "staticlib"]
+
+[dependencies]
+# The `igui` facade. `ui` (drawing / components), `app` (the plugin runtime),
+# `wgpu` (the native backend), `profile` (frame inspection), `recording` and
+# `headless` (the `--selfcheck` presenter). The views live in `src/ui`.
+#
+# Local checkout for now (`../igui`, currently at tag v0.3.1). To pin a release
+# instead, swap the path for the git dependency classic-game-box uses:
+#     igui = { git = "https://github.com/lazyfury/igui", tag = "v0.3.1",
+#              default-features = false }
+igui = { path = "../igui/igui", default-features = false, features = [
+    "ui",
+    "app",
+    "wgpu",
+    "profile",
+    "recording",
+    "headless",
+] }
+# Not covered by any facade feature. `igui_scene` / `igui_core` are also required
+# by igui's `impl_scene_child!` macro, which expands to bare `igui_scene::` /
+# `igui_core::` paths (no `$crate`).
+igui_scene = { path = "../igui/crates/core/igui_scene" }
+igui_core = { path = "../igui/crates/core/igui_core" }
+
+# PNG encode for the editor's export / clipboard path (no backend, no UI).
+png = "0.17"
+
+# Every `unsafe` block must carry a `// SAFETY:` comment stating why it is
+# sound. The FFI / raw-pointer layer is small but load-bearing.
+[workspace.lints.clippy]
+undocumented_unsafe_blocks = "warn"
+
+[lints]
+workspace = true
+
+[profile.release]
+opt-level = "s"
+lto = true

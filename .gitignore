@@ -1,0 +1,17 @@
+# Build output.
+/target/
+/build/
+/dist/
+/.vscode/
+
+# Swift/macOS client (SwiftPM).
+/macos/.build/
+/macos/.swiftpm/
+
+# macOS
+.DS_Store
+._*
+
+# Editors
+.idea/
+*.swp
