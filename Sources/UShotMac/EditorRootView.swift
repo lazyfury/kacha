@@ -56,28 +56,70 @@ private struct EditorToolbar: View {
     var body: some View {
         HStack(spacing: 4) {
             ForEach(Tool.allCases, id: \.self) { tool in
-                ToolButton(tool: tool, active: state.tool == tool) {
+                ToolbarButton(
+                    symbol: tool.showsTextOnly ? nil : tool.symbol,
+                    title: tool.label,
+                    active: state.tool == tool,
+                    disabled: false,
+                    showsLabel: tool.showsLabel
+                ) {
                     state.tool = tool
                 }
             }
 
             separator
 
-            ActionButton(symbol: ToolbarSymbol.undo, title: "撤销", disabled: state.annotations.isEmpty) {
+            ToolbarButton(
+                symbol: ToolbarSymbol.undo,
+                title: "撤销",
+                active: false,
+                disabled: state.annotations.isEmpty
+            ) {
                 state.undo()
                 canvas.needsDisplay = true
             }
-            ActionButton(symbol: ToolbarSymbol.redo, title: "重做", disabled: state.redo.isEmpty) {
+            ToolbarButton(
+                symbol: ToolbarSymbol.redo,
+                title: "重做",
+                active: false,
+                disabled: state.redo.isEmpty
+            ) {
                 state.redoLast()
                 canvas.needsDisplay = true
             }
 
             separator
 
-            ActionButton(symbol: ToolbarSymbol.copy, title: "复制", disabled: false, action: onCopy)
-            ActionButton(symbol: ToolbarSymbol.save, title: "保存", disabled: false, action: onSave)
-            ActionButton(symbol: ToolbarSymbol.pin, title: "钉图", disabled: false, action: onPin)
-            ActionButton(symbol: ToolbarSymbol.close, title: "关闭", disabled: false, action: onClose)
+            ToolbarButton(
+                symbol: ToolbarSymbol.copy,
+                title: "复制",
+                active: false,
+                disabled: false,
+                showsLabel: true,
+                action: onCopy
+            )
+            ToolbarButton(
+                symbol: ToolbarSymbol.save,
+                title: "保存",
+                active: false,
+                disabled: false,
+                showsLabel: true,
+                action: onSave
+            )
+            ToolbarButton(
+                symbol: ToolbarSymbol.pin,
+                title: "钉图",
+                active: false,
+                disabled: false,
+                action: onPin
+            )
+            ToolbarButton(
+                symbol: ToolbarSymbol.close,
+                title: "关闭",
+                active: false,
+                disabled: false,
+                action: onClose
+            )
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
@@ -91,43 +133,36 @@ private struct EditorToolbar: View {
     }
 }
 
-/// A tool button; the active tool gets a filled accent capsule.
-private struct ToolButton: View {
-    let tool: Tool
-    let active: Bool
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            Image(systemName: tool.symbol)
-                .font(.system(size: 15, weight: .medium))
-                .frame(width: 30, height: 26)
-                .foregroundStyle(active ? Color.white : Color.primary)
-                .background(
-                    RoundedRectangle(cornerRadius: 7, style: .continuous)
-                        .fill(active ? Color.accentColor : Color.clear)
-                )
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .help(tool.label)
-        .accessibilityLabel(tool.label)
-    }
-}
-
-/// An action button (undo / copy / save / …).
-private struct ActionButton: View {
-    let symbol: String
+/// One toolbar button: an optional SF Symbol, an optional Chinese label, and a
+/// filled accent capsule when it is the active tool.
+private struct ToolbarButton: View {
+    let symbol: String?
     let title: String
+    let active: Bool
     let disabled: Bool
+    var showsLabel = false
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
-            Image(systemName: symbol)
-                .font(.system(size: 14, weight: .medium))
-                .frame(width: 28, height: 26)
-                .contentShape(Rectangle())
+            HStack(spacing: 5) {
+                if let symbol {
+                    Image(systemName: symbol)
+                        .font(.system(size: 14, weight: .medium))
+                }
+                if showsLabel {
+                    Text(title)
+                        .font(.system(size: 12, weight: .medium))
+                }
+            }
+            .frame(minWidth: showsLabel ? nil : 28, minHeight: 26)
+            .padding(.horizontal, showsLabel ? 8 : 0)
+            .foregroundStyle(active ? Color.white : Color.primary)
+            .background(
+                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    .fill(active ? Color.accentColor : Color.clear)
+            )
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .disabled(disabled)
