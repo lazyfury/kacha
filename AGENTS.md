@@ -52,6 +52,8 @@ macOS 截图工具。**纯 Swift 应用**：AppKit 管窗口 / 原生事件与�
   开关**（录制中改 stream 配置会中断录制）：用 `MicRecorder`（AVCaptureSession + AVAssetWriter）
   独立采集、mute 标志跳过采样，停止后用 `RecordingMuxer` 按主机时钟偏移合流。麦克风需打包
   `.app` 且 `Info.plist` 有 `NSMicrophoneUsageDescription`，否则请求权限会崩。详见 `RECORDING.md`。
+  停止按钮先 `recordingBar.setSaving(true)` 再 `session.stop()`，落盘用 `Export.saveMovieForRecording`
+  （有目录时在后台线程 move），别同步 copy 大文件卡主线程。
 - **多段录屏拼接要插到同一条 video / audio 轨**，别在循环里 `addMutableTrack` 每段新建一条：
   `AVMutableComposition` 多个视频轨只会显示第一条，后面的画面会**冻结在第一条最后一帧**（看起来
   像“继续后没录上”）。`VideoConcatenator` 只建一条视频轨 + 一条音轨，每段插到同一条轨的 cursor 上。
@@ -90,7 +92,9 @@ macOS 截图工具。**纯 Swift 应用**：AppKit 管窗口 / 原生事件与�
 - **标注样式存在标注上，不读全局。** `color` / `stroke` / `filled` 是 `Annotation` 的字段
   （新建时从 `EditorState` 快照）；绘制不要去看 `state.color`。工具栏的面板改的是
   `state.color` / `state.strokeFactor` / `state.rectangleFilled`。文字编辑用
-  `editingAnnotation` 索引在 `commitText` 里原地替换（清空则删除），别 append 新的。
+  `editingAnnotation` 索引在 `commitText` 里原地替换（清空则删除），
+  但**先走 `EditorState.replaceText(at:with:)` 拒绝过期下标**；工具栏撤销 / 重做前先
+  `canvas.commitText()`，别在文字框还开着时直接 pop 数组（会下标越界）。
 - **截图提示音不嵌入音频文件。** 优先加载系统截图那声（`/System/Library/Components/
   CoreAudio.component/Contents/SharedSupport/SystemSounds/system/Screen Capture.aif`），
   失败回退 `NSSound(named: "Tink")`（`/System/Library/Sounds`，还能被 `~/Library/Sounds`

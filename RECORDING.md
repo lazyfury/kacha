@@ -1,11 +1,12 @@
-# kacha 录屏 —— 规划设计（提案，未确认）
+# kacha 录屏 —— 实现说明（已实现）
 
-> 状态：**Phase 1 + 2a 已实现**。录屏已从 `DESIGN.md` 的非目标移入范围。
-> 已按推荐决策：方案 A（`SCRecordingOutput`，macOS 15+ 门控）、无暂停、
-> 支持区域 / 窗口 / 整屏、窗口列表（支持被遮挡窗口）、自动运镜放 Phase 4。
-> Phase 2a/2b 已做：帧率 / 编码 / 容器 / 音频来源（含系统声 + 麦克风混音）设置、开始前倒数、
+> 状态：**Phase 1 + 2 + 3（暂停）已实现**；本文件保留当初的调研与决策，作为实现依据。
+> 已定方案：方案 A（`SCRecordingOutput`，macOS 15+ 门控）、区域 / 窗口 / 整屏、
+> 自动运镜放 Phase 4。§5.1 的窗口列表**未做**——目前只支持覆盖层点选鼠标下的窗口。
+> Phase 2 已做：帧率 / 编码 / 容器 / 音频来源（含系统声 + 麦克风混音）设置、开始前倒数、
 > 光标 / 点击高亮、麦克风（独立采集 + 结束合流，录制中可实时开关）。
-> Phase 3 部分已做：**暂停 / 继续**（分段录制 + 归一化 + 拼接）。GIF / 裁剪未做，Phase 4 未做。
+> Phase 3 已做：**暂停 / 继续**（分段录制 + 归一化 + 拼接，未采用 writer 方案）。
+> 未做：GIF、系统裁剪 UI、自动运镜（Phase 4）。
 >
 > 所有 API 可用性均用本机 `MacOSX27.0.sdk` 头文件核实（系统 macOS 26.7.1）。
 
@@ -23,8 +24,8 @@ mp4/mov，不用自己接 `AVAssetWriter`。kacha 现有的
 
 - `SCRecordingOutput` 是 **macOS 15.0+**；14.0 上要么降级不可用，要么另写
   `AVAssetWriter` 路径。
-- `SCRecordingOutput` **没有暂停**（只有开始 / 停止 / 结束写文件）。暂停要么不做，
-  要么用「分段录制 + 导出拼接」，成本明显上升。
+- `SCRecordingOutput` **没有暂停**（只有开始 / 停止 / 结束写文件）。暂停用「分段录制 +
+  导出拼接」实现（Phase 3 已做，见 §12）。
 - 区域录制受 `sourceRect` 限制，**只能落在一块显示器内**（跨屏区域录不了单文件）。
 - 麦克风需要新的 `NSMicrophoneUsageDescription` + 麦克风 TCC。
 
@@ -76,7 +77,7 @@ mp4/mov，不用自己接 `AVAssetWriter`。kacha 现有的
 ### 方案 A（推荐）：`SCRecordingOutput`，录屏门控到 macOS 15+
 
 - 优点：代码量最小、Apple 官方路径、自动封装音视频、实时时长 / 体积、低内存。
-- 缺点：14.0 不可用；**无暂停**；画质 / 码率可调项比自建 writer 少。
+- 缺点：14.0 不可用；**无暂停**（后由分段录制 + 拼接补上）；画质 / 码率可调项比自建 writer 少。
 - 结论：**MVP 用这个**。14.0 上录屏入口隐藏（其余功能不受影响）。
 
 ### 方案 B：`SCStream` + `AVAssetWriter`（自建）
@@ -126,7 +127,7 @@ mp4/mov，不用自己接 `AVAssetWriter`。kacha 现有的
   `sourceRect` + 输出像素尺寸（可自检）。
 - **排除自身**：display filter 用 `SCContentFilter(display:excludingWindows: ownWindows)`；
   控制栏窗口 `sharingType = .none`，保证控制栏不进画面。
-- **区域单屏**：选区若跨屏，确认时拒绝并提示（或自动取交集所在的主屏）。
+- **区域单屏**：选区若跨屏，确认时拒绝并提示重新框选（代码已校验；单屏内正常录制）。
 - **Retina**：`config.width/height = 选区点尺寸 × display.scale`（沿用现有 scale 逻辑），
   `sourceRect` 用点。
 - **控制栏**：`NSPanel`（`.nonactivatingPanel`、`.floating`、`orderFrontRegardless`、
@@ -170,23 +171,28 @@ mp4/mov，不用自己接 `AVAssetWriter`。kacha 现有的
 
 ---
 
-## 6. 改动清单（预估）
+## 6. 落地清单（与实际实现对照）
 
-新增：
+> 下面是当初的规划；标注「未做」的未实现，其余均已落地（文件位置以仓库为准）。
 
 ```
 Sources/KachaMac/Core/
-  Recording.swift          # RecordingSession：状态机 + 计时 + 配置快照（纯逻辑可测）
-  RecordingTarget.swift    # 目标 → sourceRect / 像素尺寸 的纯映射（可测）
-  CursorTrack.swift        # 光标 / 点击 / Ctrl 手势轨迹（Phase 3，纯数据）
-  AutoZoom.swift           # 焦点 → 变焦关键帧（Phase 3，纯逻辑可测）
+  Recording.swift          # RecordingTarget / 区域几何 / 时长格式化 / 配置枚举（纯逻辑可测）
+  CursorTrack.swift        # 光标 / 点击 / Ctrl 手势轨迹（Phase 4，未做）
+  AutoZoom.swift           # 焦点 → 变焦关键帧（Phase 4，未做）
 Sources/KachaMac/Helper/
   ScreenRecorder.swift     # SCStream + SCRecordingOutput 后端（15+）
-  VideoCompositor.swift    # AVVideoComposition / 自定义 AVVideoCompositing（Phase 3）
+  RecordingSession.swift   # 录制会话：分段 / 暂停 / 归一化 / 拼接
+  MicRecorder.swift        # 独立麦克风采集
+  RecordingMuxer.swift     # 视频 + 音频合流
+  AudioMixer.swift         # 系统声 + 麦克风混音
+  VideoConcatenator.swift  # 多段拼接
+  MovieExport.swift        # AVAssetExportSession 封装（15+ async / 14 回退）
+  VideoCompositor.swift    # AVVideoComposition / 自定义 AVVideoCompositing（Phase 4，未做）
 Sources/KachaMac/UI/
   AppKit/RecordingBar.swift        # 控制栏 NSPanel
-  SwiftUI/RecordingBarView.swift   # 控制栏 SwiftUI（计时 / 停止 / 取消 / 静音）
-  SwiftUI/WindowPickerView.swift   # 录制窗口列表（按 app 分组，含被遮挡窗口）
+  SwiftUI/RecordingBarView.swift   # 控制栏 SwiftUI（计时 / 暂停 / 停止 / 取消 / 静音）
+  SwiftUI/WindowPickerView.swift   # 录制窗口列表（§5.1，未做）
 ```
 
 改动：
@@ -196,7 +202,7 @@ Sources/KachaMac/UI/
 - `App/AppDelegate.swift`：`startRecording()`、`ScreenRecorder` 生命周期、保存 / 结果。
 - `App/MenuBar.swift`：加「录制屏幕」条目。
 - `Helper/Hotkeys.swift` + `Helper/Preferences.swift`：第 4 个全局热键 + 录制偏好。
-- `Helper/Export.swift`：`movieName()` / 保存 movie（复用 `deduplicatedName`）。
+- `Helper/Export.swift`：录制保存（复用 `deduplicatedName`）。
 - `UI/SwiftUI/SettingsRootView.swift`：新增「录制」分组。
 - `Helper/SelfCheck.swift` + `App/LaunchOptions.swift` + `scripts/dev.sh`：断言 + smoke。
 - `packaging/Info.plist`：`NSMicrophoneUsageDescription`（若做麦克风）。
@@ -209,15 +215,18 @@ Sources/KachaMac/UI/
 
 - **入口**：菜单栏「录制屏幕」+ 全局热键（默认 `⌘⇧R`，可改）。
 - **选择**：复用覆盖层（区域 / 窗口 / 整屏），底部提示文案改成录制语境。
-- **开始前**：可选 3 秒倒数（复用 `CountdownHUD`），方便摆好窗口。
+- **开始前**：可选 3 秒倒数（复用 `CountdownHUD`），方便摆好窗口；倒数面板可取消。
 - **控制栏**（悬浮、可拖动、不进画面）：
   - 红点 + 计时 `00:12`（>1h 显示 `1:02:03`）
-  - ⏸ 暂停（**MVP 不做**，见决策点）
+  - ⏸ 暂停 / 继续（已做，分段录制）
   - ⏹ 停止（保存）
   - ✕ 取消（丢弃文件）
-  - 系统声 / 麦克风开关（可做成开始前设置、录制中只读）
-- **结束后**：存到 `Preferences.saveDirectory`，否则弹保存面板；结果 sheet 给
-  「在 Finder 显示」/「复制路径」。
+  - 停止后切到 **「正在保存…」** 转圈（禁用其余按钮），直到拼接 / 合流 / 落盘完成
+  - 系统声 / 麦克风：设置里选，录制中可实时开关麦克风
+- **结束后**：存到 `Preferences.saveDirectory`（移动在后台线程），否则弹保存面板；
+  结果弹窗给「在 Finder 显示」。
+- **退出**：录制中退出会先弹「停止并保存 / 丢弃并退出 / 取消」；选保存则等文件落盘再退出，
+  不会静默丢掉已录内容。
 - 录制中菜单栏图标可加红点（可选）。
 
 ---
@@ -254,8 +263,8 @@ Sources/KachaMac/UI/
   - `RecordingTarget` → `sourceRect` / 像素尺寸（含 Retina、区域裁剪、跨屏拒绝）
   - 编码 / 容器 / 帧率 → `SCRecordingOutputConfiguration` 字段映射
   - 文件名 `kacha-<时间戳>.mp4` + 去重（复用 `Export.deduplicatedName`）
-- **`--smoke-record`（真实窗口路径）**：开控制栏 → 计时跳几秒 → 关闭，回归
-  `isReleasedWhenClosed` / 编辑窗同款生命周期；**不真的录屏**、不需要权限。
+- **`--smoke-record`（真实窗口路径）**：开控制栏 → 计时跳几秒 → 切到「正在保存…」→ 关闭，
+  回归 `isReleasedWhenClosed` / 编辑窗同款生命周期；**不真的录屏**、不需要权限。
 - **不做**：录出来的视频像素断言（硬规则 6）。
 
 ---
@@ -264,12 +273,13 @@ Sources/KachaMac/UI/
 
 | 风险 | 缓解 |
 |---|---|
-| `SCRecordingOutput` 无暂停 | MVP 不做暂停；后续「分段文件 + `AVAssetExportSession` 拼接」或转 B |
+| `SCRecordingOutput` 无暂停 | 已做（Phase 3）：分段文件 + `AVAssetExportSession` 拼接（`VideoConcatenator`） |
 | 14.0 不可用 | 入口 `#available(macOS 15.0, *)` 门控，14 上隐藏并给说明 |
-| 区域跨屏 | 确认时校验必须落在单屏，否则提示 |
+| 区域跨屏 | 确认时校验必须落在单屏，否则提示重新框选 |
 | 控制栏被录进去 | 窗口 `sharingType = .none` + filter 排除自身窗口 |
 | 磁盘满 / 写失败 | `didFailWithError` → 弹窗，保留已写部分并告知路径 |
 | 锁屏 / 显示器休眠中断流 | `stream(_:didStopWithError:)` → 收尾、提示 |
+| 录制中退出应用 | `applicationShouldTerminate` 弹确认；选保存返回 `.terminateLater`，等落盘再退 |
 | 长录制内存 | `SCRecordingOutput` 增量写盘，内存压力小 |
 | 裸二进制请求麦克风崩溃 | 仅打包 `.app` 且 Info.plist 有 usage 时才开放麦克风开关 |
 | 自动运镜重编码慢 | 输出降分辨率 / 硬件编码；后处理放后台并给进度 |
@@ -277,31 +287,29 @@ Sources/KachaMac/UI/
 
 ---
 
-## 12. 分期与待确认决策点
+## 12. 分期与决策点
 
-### 决策点（需要你拍板）
+### 决策点（已定）
 
-1. **14.0 是否必须支持录屏？**
-   - 否（推荐）→ 走方案 A，`SCRecordingOutput`，15+ 门控。
-   - 是 → 走方案 B，多写一个 `AVAssetWriter` 后端。
-2. **MVP 是否要暂停？**（方案 A 没有）推荐 MVP 不做。
-3. **区域录制是否必须？** 推荐要（复用覆盖层即可）；只录窗口 / 整屏可更快。
-4. **音频是否进 MVP？** 推荐：MVP 先视频，系统声 + 麦克风放二期。
-5. **GIF 导出？** 建议后续单独做（AVAssetImageGenerator 抽帧 + ImageIO）。
-6. **窗口选择要不要列表（录被遮挡 / 不在最前的窗口）？** 推荐要（`SCWindow` 列表）。
-7. **自动运镜 / 焦点缩放（hero 动画）做不做、放哪期？** 推荐 Phase 3+ 独立设计；
+1. **14.0 是否必须支持录屏？** → **否（已定）**：走方案 A，`SCRecordingOutput`，15+ 门控。
+2. **MVP 是否要暂停？** → **要**：Phase 3 用分段录制 + 拼接补上（未走 writer 方案）。
+3. **区域录制是否必须？** → **要**：复用覆盖层选区。
+4. **音频是否进 MVP？** → **系统声 + 麦克风都做了**（Phase 2，含混音 / 合流）。
+5. **GIF 导出？** → 未做，留作后续（AVAssetImageGenerator 抽帧 + ImageIO）。
+6. **窗口选择要不要列表？** → **未做**：目前只能点选鼠标下的窗口，`SCWindow` 列表待补。
+7. **自动运镜 / 焦点缩放（hero 动画）做不做、放哪期？** → **Phase 4，未做**；
    需要先定「显式 Ctrl 手势 / 自动点击 / 光标跟随」三种焦点来源各要哪些。
 
 ### 分期
 
 - **Phase 1（MVP）**：区域 / 窗口 / 整屏 **视频**录制（H.264 mp4）、控制栏
-  （停止 / 取消 / 计时）、菜单 + 热键、复用保存目录、`--selfcheck` + `--smoke-record`。
-- **Phase 2**：系统声 + 麦克风、帧率 / 编码 / 容器设置、开始前倒数、光标 / 点击高亮。
-- **Phase 3**：GIF、未来 OS 的 `SCRecordingEditor` 裁剪。（**暂停已做**：分段录制，停止时
-  用 `VideoConcatenator` 拼接；未采用 writer 方案。）
+  （停止 / 取消 / 计时）、菜单 + 热键、复用保存目录、`--selfcheck` + `--smoke-record`。**已做。**
+- **Phase 2**：系统声 + 麦克风、帧率 / 编码 / 容器设置、开始前倒数、光标 / 点击高亮。**已做。**
+- **Phase 3**：暂停 / 继续（分段录制 + 拼接，`VideoConcatenator`，未采用 writer 方案）。**已做。**
+  GIF、未来 OS 的 `SCRecordingEditor` 裁剪**未做**。
 - **Phase 4（自动运镜）**：录制时记光标 / 点击 / Ctrl 手势轨迹，后处理用
   `AVMutableVideoComposition`（或自定义 `AVVideoCompositing`）做焦点缩放 + 平滑光标；
-  单独设计、单独分期。
+  单独设计、单独分期。**未做。**
 - **非目标**：摄像头 PiP、直播推流、云上传、时间线剪辑。
 
 ---
@@ -312,7 +320,7 @@ Sources/KachaMac/UI/
 |---|---|---|
 | Phase 1 | 中 | 覆盖层 `.record` 分支 + 控制栏窗口生命周期 |
 | Phase 2 | 中 | 麦克风 TCC / 裸二进制崩溃边界、设置项 |
-| Phase 3 | 大 | 暂停拼接 / writer 重写 |
+| Phase 3 | 大 | 分段时长对齐 / 音频混流边界（已做） |
 
 ---
 

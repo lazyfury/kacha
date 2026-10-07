@@ -25,7 +25,8 @@ macOS 截图工具。**纯 Swift**：AppKit 管窗口、Core Graphics 画界面�
   覆盖层选区；确认后弹悬浮控制栏（计时 / 停止 / 取消，麦克风实时开关）。窗口录制**不依赖顶层**，
   被遮挡的窗口也能录。设置里可选帧率 / 编码 / 容器 / 音频来源 / 倒数 / 光标 / 点击高亮；
   有保存目录就直写，否则停止后弹保存面板。控制栏可暂停 / 继续（分段录制，停止时拼接）、
-  实时开关麦克风。麦克风是独立采集（需打包 `.app`）；音频来源可选
+  实时开关麦克风；停止后控制栏切到「正在保存…」转圈，直到拼接 / 落盘完成（大文件也不会
+  看着像卡死，文件移动在后台线程）。麦克风是独立采集（需打包 `.app`）；音频来源可选
   「系统 + 麦克风」，停止后用 `AVAssetReaderAudioMixOutput` 混成一条音轨再合流（麦克风可用时
   默认就是这一档）。开始录制前的
   倒数面板里就能开关麦克风，设置「录制」页还有麦克风权限状态与请求入口。录制中菜单项
@@ -77,7 +78,7 @@ Sources/KachaMac/
     EditorRootView.swift  编辑窗 SwiftUI：玻璃工具栏 + 画布 representable
     OCRResultView.swift   OCR 识别结果 sheet（可编辑 / 复制）
     BarcodeResultView.swift 二维码 / 条码结果 sheet（逐条复制）
-    RecordingBarView.swift 录屏控制栏 SwiftUI（计时 / 停止 / 取消）
+    RecordingBarView.swift 录屏控制栏 SwiftUI（计时 / 暂停 / 停止 / 取消 / 正在保存）
     CountdownView.swift   倒计时圆盘 + 录制前麦克风开关
     SettingsWindow.swift  设置窗（NSWindow 宿主）
     SettingsRootView.swift 设置窗 SwiftUI：系统设置风侧边栏 + 分组按钮 + 卡片
@@ -97,6 +98,7 @@ Sources/KachaMac/
     RecordingMuxer.swift  视频 + 音频合流（AVMutableComposition）
     AudioMixer.swift      系统声 + 麦克风混成一条音轨
     VideoConcatenator.swift 多段视频拼接（passthrough）
+    MovieExport.swift     AVAssetExportSession 封装（15+ async，14 回退）
     ShotSound.swift       系统截图提示音
     SelfCheck.swift       `--selfcheck` 纯逻辑断言
 
@@ -111,14 +113,16 @@ scripts/make-icon.sh      由 AppIcon.png 生成 .icns（打包时自动调用�
 ```bash
 scripts/build.sh                 # swift build
 scripts/run.sh                   # 构建并运行（菜单栏，无窗口）
+scripts/run.sh --smoke-settings  # 开/关设置窗
 scripts/run.sh --smoke-editor    # 开/关编辑窗，走 AppKit 真实关闭路径
 scripts/run.sh --smoke-export    # 注入合成图 → 编辑 → 复制到剪贴板
+scripts/run.sh --smoke-ocr       # 渲染已知文字 → Vision 识别 → 断言
 scripts/run.sh --smoke-viewer    # 空看图窗 → 载入图片 → 导出
 scripts/run.sh --smoke-barcode   # 生成 QR → 编辑窗解码 → 断言 payload
 scripts/run.sh --smoke-record    # 开 / 关录屏控制栏（不真录屏）
 scripts/package.sh [--open]      # 组装并 ad-hoc 签名 dist/kacha.app（含图标）
 
-./scripts/dev.sh                 # build + selfcheck + settings/editor/export/ocr/viewer/barcode smoke
+./scripts/dev.sh                 # build + selfcheck + settings/editor/export/ocr/viewer/barcode/record smoke
 ```
 
 也可以直接用 **Xcode** 打开仓库根目录（`Package.swift` 即项目），选 `kacha-mac` scheme 运行。
@@ -135,9 +139,9 @@ scripts/package.sh [--open]      # 组装并 ad-hoc 签名 dist/kacha.app（含�
 
 ## 已知缺口
 
-- 形状 / 画笔固定红色 2px，文字固定 18px（按图片对角线缩放）；高亮是半透明黄、马赛克是
-  粗笔刷涂抹，宽度按对角线缩放（最小 16px）。没有颜色 / 线宽选择器。
-- 文字提交后不能二次编辑（可撤销）。
-- 窗口拾取不做 app 级分组 / 子窗口选择。
+- 形状 / 画笔的颜色是 8 色预设、线宽是 4 档预设，没有连续滑块 / 自定义取色。
+- 文字字号按图片对角线派生（没有字号选择器）；文字可点选 / 双击二次编辑。
+- 窗口拾取不做 app 级分组 / 子窗口选择；录屏也只能点选鼠标下的窗口，还没有窗口列表。
 - 裁剪 / 滚屏长图未做。
-- 录屏只到 Phase 1：无暂停 / 系统声 / 麦克风，且仅 macOS 15+；区域不能跨屏；自动运镜未做。
+- 录屏仅 macOS 15+（14.0 上入口隐藏）；区域不能跨屏；自动运镜 / 焦点缩放未做。
+- 多显示器非均匀缩放下的跨屏拼接以最大 scale 兜底，尚未逐屏混合。

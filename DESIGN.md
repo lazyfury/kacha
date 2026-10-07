@@ -25,7 +25,7 @@
 ### 1.1 非目标
 
 - 滚屏长图、GIF 导出、云上传与分享链接。
-- 录屏的暂停 / 音频 / 自动运镜（分期见 `RECORDING.md`）。
+- 录屏的自动运镜 / 焦点缩放（暂停与音频已实现，见 `RECORDING.md`）。
 - 多用户 / 账户 / 同步。
 - Windows / Linux 壳。
 - 用截图做**测试**验证（见 §7）。
@@ -99,14 +99,14 @@ kacha/
 │   │   │   ├── LiveTextOverlay.swift    # VisionKit 识别文字（原位选字）覆盖层
 │   │   │   ├── PinWindows.swift        # 钉图悬浮窗
 │   │   │   ├── ColorPicker.swift       # 放大镜 + 像素取样 + hex
-│   │   │   └── WindowChrome.swift      # 窗口 chrome / isReleasedWhenClosed 统一设置
-│   │   │   └── CountdownHUD.swift      # 倒计时面板（NSHostingView 宿主）
+│   │   │   ├── WindowChrome.swift      # 窗口 chrome / isReleasedWhenClosed 统一设置
+│   │   │   ├── CountdownHUD.swift      # 倒计时面板（NSHostingView 宿主）
 │   │   │   └── RecordingBar.swift      # 录屏悬浮控制栏（NSPanel 宿主）
 │   │   └── SwiftUI/              # NSHostingView 承载的 chrome
 │   │       ├── EditorRootView.swift     # 编辑窗：玻璃工具栏 + 画布 representable
 │   │       ├── OCRResultView.swift      # OCR 识别结果 sheet（可编辑 / 复制）
 │   │       ├── BarcodeResultView.swift  # 二维码 / 条码结果 sheet（逐条复制）
-│   │       ├── RecordingBarView.swift   # 录屏控制栏 SwiftUI（计时 / 停止 / 取消）
+│   │       ├── RecordingBarView.swift   # 录屏控制栏 SwiftUI（计时 / 暂停 / 停止 / 取消 / 正在保存）
 │   │       ├── CountdownView.swift      # 倒计时圆盘 + 录制前麦克风开关
 │   │       ├── SettingsWindow.swift     # 设置窗（NSWindow 宿主）
 │   │       ├── SettingsRootView.swift   # 设置窗：系统设置风侧边栏 / 分组按钮 / 卡片
@@ -126,6 +126,7 @@ kacha/
 │       ├── RecordingMuxer.swift  # 视频 + 音频合流（AVMutableComposition）
 │       ├── AudioMixer.swift      # 系统声 + 麦克风混成一条音轨
 │       ├── VideoConcatenator.swift # 多段视频拼接（passthrough）
+│       ├── MovieExport.swift     # AVAssetExportSession 封装（15+ async / 14 回退）
 │       ├── ShotSound.swift       # 系统截图提示音
 │       └── SelfCheck.swift       # --selfcheck 纯逻辑断言
 ├── packaging/Info.plist          # LSUIElement=true、LSMinimumSystemVersion=14.0
@@ -215,7 +216,8 @@ marker 工具，用 `defaultMarkerStroke`（最小 16px）的粗笔刷。
   派生（alpha 0.35）。
 - **文字二次编辑**：文字工具点已有文字（或双击，任意工具）进入编辑；命中用
   `NSAttributedString.size()` 在图像像素里算包围盒；编辑时隐藏原标注、提交时原地替换，
-  清空则删除。
+  清空则删除。工具栏撤销 / 重做前会先 `commitText()`，`replaceText` 对过期下标直接
+  拒绝（在编辑期间被撤销删掉时不再越界）。
 
 ### 4.8 UI 框架与 Liquid Glass
 
@@ -280,9 +282,9 @@ Core Image 的 `CIQRCodeGenerator` 生成一个 QR 再解码断言（`--smoke-ba
 步一个 Picker）。选定后 `CountdownHUD` 在鼠标所在屏幕中央开一个半透明圆盘倒数，
 每秒更新一次 `CountdownModel`（SwiftUI `CountdownView`）；归零时先 `cancel()`（`orderOut`
 掉面板）再冻结屏幕，保证倒计时本身不会进冻帧（面板也开了 `sharingType = .none` 双保险）。
-面板是 `.nonactivatingPanel`，默认 `ignoresMouseEvents`（延时截图不挡交互）；**录屏倒数时**
-会多一个麦克风开关（`micAvailable`），此时接受点击，在开始录制前就能决定麦克风开关，
-状态带进录制。
+面板是 `.nonactivatingPanel`；倒数带取消按钮时接受点击（延时截图与录屏都能中途取消），
+否则 `ignoresMouseEvents` 不挡交互。**录屏倒数时**还会多一个麦克风开关（`micAvailable`），
+在开始录制前就能决定麦克风开关，状态带进录制；取消会把预留的单会话状态释放掉。
 
 ### 4.13 录屏
 
@@ -298,12 +300,18 @@ Core Image 的 `CIQRCodeGenerator` 生成一个 QR 再解码断言（`--smoke-ba
   纯函数，向下取偶，H.264 要求）；整屏同理。
 - **排除自身**：filter 排除本 app 窗口，控制栏 `sharingType = .none`，保证控制栏不进画面。
 - **控制栏**：`RecordingBar`（`.nonactivatingPanel` + `sharingType = .none`，`isMovableByWindowBackground`）
-  里放 SwiftUI，红点 + 计时（`formatDuration`）+ 停止 / 取消；计时轮询
-  `SCRecordingOutput.recordedDuration`。
+  里放 SwiftUI，红点 + 计时（`formatDuration`）+ 暂停 / 停止 / 取消；计时轮询
+  `SCRecordingOutput.recordedDuration`。点停止后切到**「正在保存…」**转圈，直到分段拼接 /
+  音轨合流 / 文件落盘完成，避免大录制看似卡死。
 - **保存**：有保存目录就直写（`Export.recordingDestination` 去重），否则先写临时文件，
-  停止后用 `Export.saveMovie` 弹保存面板；结果弹窗给「在 Finder 显示」。
+  停止后用 `Export.saveMovieForRecording` 落盘（有目录时移动在后台线程，避免卡主线程）/ 弹保存
+  面板；结果弹窗给「在 Finder 显示」。
+- **退出**：录制中退出会先弹「停止并保存 / 丢弃并退出 / 取消」，选保存则 `.terminateLater`
+  等文件落盘再退（`finishRecording` 里 `reply`）。AV 导出走 `MovieExport.runMovieExport`
+  （macOS 15+ 用 `export(to:as:)`，14 回退 `exportAsynchronously`）。
 - **设置**（设置窗「录制」分组，segmented 按钮组）：帧率 30/60、编码 H.264/HEVC、容器 MP4/MOV、
-  音频来源 无 / 系统声音 / 麦克风、开始前倒数、显示光标、点击高亮。`Preferences.recordingConfig`
+  音频来源 无 / 系统声音 / 麦克风 / 系统 + 麦克风、开始前倒数、显示光标、点击高亮。
+  `Preferences.recordingConfig`
   持久化，`ScreenRecorder` 映射到 `SCStreamConfiguration` / `SCRecordingOutputConfiguration`。
 - **麦克风**：`SCRecordingOutput` 录制中改配置会**中断录制**，所以麦克风不能用 `SCStream`
   实时开关。改为 `MicRecorder`（`AVCaptureSession` + `AVAssetWriter` 写 m4a）独立采集，
@@ -374,6 +382,6 @@ Core Image 的 `CIQRCodeGenerator` 生成一个 QR 再解码断言（`--smoke-ba
 - 窗口拾取不做 app 级分组 / 子窗口选择。
 - 裁剪 / 滚屏长图未做。
 - 多显示器非均匀缩放下的跨屏拼接以最大 scale 兜底，尚未逐屏混合。
-- 录屏：Phase 1 只有视频（无暂停 / 系统声 / 麦克风），且仅 macOS 15+；区域不能跨屏；
+- 录屏仅 macOS 15+（14.0 上入口隐藏）；区域不能跨屏；窗口只能点选鼠标下那一个；
   自动运镜 / 焦点缩放未做（见 `RECORDING.md`）。
 - Liquid Glass 只在 macOS 26+ 生效，旧系统是材质回退；部署目标仍是 14.0。
