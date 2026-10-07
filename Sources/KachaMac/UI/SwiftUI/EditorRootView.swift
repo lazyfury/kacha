@@ -72,6 +72,9 @@ private struct EditorToolbar: View {
     let onPin: () -> Void
     let onClose: () -> Void
 
+    /// Tools are disabled until an image is loaded (the empty viewer window).
+    private var hasImage: Bool { state.hasImage }
+
     var body: some View {
         HStack(spacing: 4) {
             WindowDragGrip()
@@ -81,7 +84,7 @@ private struct EditorToolbar: View {
                     symbol: tool.showsTextOnly ? nil : tool.symbol,
                     title: tool.label,
                     active: state.tool == tool,
-                    disabled: false,
+                    disabled: !hasImage,
                     showsLabel: tool.showsTextOnly
                 ) {
                     state.tool = tool
@@ -91,12 +94,14 @@ private struct EditorToolbar: View {
             separator
 
             ColorControl(color: $state.color)
+                .disabled(!hasImage)
             StrokeControl(factor: $state.strokeFactor)
+                .disabled(!hasImage)
             ToolbarButton(
                 symbol: state.rectangleFilled ? ToolbarSymbol.fillOn : ToolbarSymbol.fillOff,
                 title: "矩形填充",
                 active: state.rectangleFilled,
-                disabled: false
+                disabled: !hasImage
             ) {
                 state.rectangleFilled.toggle()
             }
@@ -107,7 +112,7 @@ private struct EditorToolbar: View {
                 symbol: ToolbarSymbol.undo,
                 title: "撤销",
                 active: false,
-                disabled: state.annotations.isEmpty
+                disabled: !hasImage || state.annotations.isEmpty
             ) {
                 state.undo()
                 canvas.needsDisplay = true
@@ -116,7 +121,7 @@ private struct EditorToolbar: View {
                 symbol: ToolbarSymbol.redo,
                 title: "重做",
                 active: false,
-                disabled: state.redo.isEmpty
+                disabled: !hasImage || state.redo.isEmpty
             ) {
                 state.redoLast()
                 canvas.needsDisplay = true
@@ -128,14 +133,14 @@ private struct EditorToolbar: View {
                 symbol: ToolbarSymbol.selectText,
                 title: "原位选字",
                 active: state.liveTextActive,
-                disabled: false,
+                disabled: !hasImage,
                 action: onSelectText
             )
             ToolbarButton(
                 symbol: ToolbarSymbol.copy,
                 title: "复制",
                 active: false,
-                disabled: false,
+                disabled: !hasImage,
                 showsLabel: true,
                 iconOffsetY: -1,
                 action: onCopy
@@ -144,7 +149,7 @@ private struct EditorToolbar: View {
                 symbol: ToolbarSymbol.save,
                 title: "保存",
                 active: false,
-                disabled: false,
+                disabled: !hasImage,
                 showsLabel: true,
                 primary: true,
                 iconOffsetY: -2,
@@ -154,7 +159,7 @@ private struct EditorToolbar: View {
                 symbol: ToolbarSymbol.pin,
                 title: "钉图",
                 active: false,
-                disabled: false,
+                disabled: !hasImage,
                 action: onPin
             )
             ToolbarButton(

@@ -17,6 +17,7 @@ macOS 截图工具。**纯 Swift**：AppKit 管窗口、Core Graphics 画界面�
     取消整个截图。**
   - 直接**点选窗口**（AppKit 命中测试，考虑真实 z-order / 遮挡），点空白处则抓整屏。
 - **全屏截图**（默认 `⌘⇧F`）：直接抓鼠标所在显示器进编辑窗，不走覆盖层。
+- **看图**：菜单栏开一个空编辑窗（按钮禁用），把图片拖进来即进入和截图一样的编辑流程。
 - **取色器**（默认 `⌘⇧C`）：在冻帧上取样，放大镜 + hex 读数；点击或 `Enter` 复制 hex，
   `Esc` 取消。
 - **编辑窗**：矩形（可填充）/ 箭头 / 画笔 / 文字（支持 IME，**可二次编辑**）/
@@ -85,9 +86,10 @@ scripts/build.sh                 # swift build
 scripts/run.sh                   # 构建并运行（菜单栏，无窗口）
 scripts/run.sh --smoke-editor    # 开/关编辑窗，走 AppKit 真实关闭路径
 scripts/run.sh --smoke-export    # 注入合成图 → 编辑 → 复制到剪贴板
+scripts/run.sh --smoke-viewer    # 空看图窗 → 载入图片 → 导出
 scripts/package.sh [--open]      # 组装并 ad-hoc 签名 dist/kacha.app（含图标）
 
-./scripts/dev.sh                 # build + selfcheck + settings/editor/export/ocr smoke
+./scripts/dev.sh                 # build + selfcheck + settings/editor/export/ocr/viewer smoke
 ```
 
 也可以直接用 **Xcode** 打开仓库根目录（`Package.swift` 即项目），选 `kacha-mac` scheme 运行。
@@ -97,7 +99,7 @@ scripts/package.sh [--open]      # 组装并 ad-hoc 签名 dist/kacha.app（含�
 ## 自检
 
 - `--selfcheck`：纯逻辑断言（坐标、裁剪、PNG、标注栅格化），无窗口、无屏幕录制权限、无 XCTest。
-- `--smoke-settings` / `--smoke-editor` / `--smoke-export` / `--smoke-ocr`：真实开 / 关窗口路径与 Vision 识别路径。
+- `--smoke-settings` / `--smoke-editor` / `--smoke-export` / `--smoke-ocr` / `--smoke-viewer`：真实开 / 关窗口路径、Vision 识别路径与看图空窗拖放路径。
 - **不写截图 / 录屏测试**：渲染与捕获用自检 + 纯函数单测覆盖。
 
 ## 已知缺口

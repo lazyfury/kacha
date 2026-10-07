@@ -88,7 +88,7 @@ macOS 截图工具。**纯 Swift 应用**：AppKit 管窗口 / 原生事件与�
 ## 构建与验证
 
 ```bash
-./scripts/dev.sh                     # swift build + selfcheck + 四个 smoke
+./scripts/dev.sh                     # swift build + selfcheck + 五个 smoke
 ```
 
 单独：
@@ -100,6 +100,7 @@ scripts/run.sh --smoke-settings
 scripts/run.sh --smoke-editor
 scripts/run.sh --smoke-export
 scripts/run.sh --smoke-ocr
+scripts/run.sh --smoke-viewer
 scripts/package.sh                   # 组装 dist/kacha.app
 ```
 

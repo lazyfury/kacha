@@ -20,6 +20,8 @@ struct LaunchOptions {
     let smokeExport: Bool
     /// Debug: render known text, recognize it with Vision, then quit.
     let smokeOCR: Bool
+    /// Debug: open the empty viewer, load an image into it, then quit.
+    let smokeViewer: Bool
 
     static func parse(_ arguments: [String]) -> LaunchOptions {
         var selfCheck = false
@@ -27,6 +29,7 @@ struct LaunchOptions {
         var smokeEditor = false
         var smokeExport = false
         var smokeOCR = false
+        var smokeViewer = false
         var index = 1
         while index < arguments.count {
             let argument = arguments[index]
@@ -46,9 +49,12 @@ struct LaunchOptions {
             case "--smoke-ocr":
                 smokeOCR = true
                 index += 1
+            case "--smoke-viewer":
+                smokeViewer = true
+                index += 1
             case "-h", "--help":
                 let usage =
-                    "用法：kacha-mac [--selfcheck] [--smoke-settings] [--smoke-editor] [--smoke-export] [--smoke-ocr]\n"
+                    "用法：kacha-mac [--selfcheck] [--smoke-settings] [--smoke-editor] [--smoke-export] [--smoke-ocr] [--smoke-viewer]\n"
                 FileHandle.standardError.write(Data(usage.utf8))
                 exit(0)
             default:
@@ -60,7 +66,8 @@ struct LaunchOptions {
             smokeSettings: smokeSettings,
             smokeEditor: smokeEditor,
             smokeExport: smokeExport,
-            smokeOCR: smokeOCR
+            smokeOCR: smokeOCR,
+            smokeViewer: smokeViewer
         )
     }
 }

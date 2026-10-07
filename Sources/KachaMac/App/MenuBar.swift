@@ -8,6 +8,7 @@ final class MenuBar {
     private let onCapture: () -> Void
     private let onFullScreen: () -> Void
     private let onPicker: () -> Void
+    private let onViewer: () -> Void
     private let onSettings: () -> Void
     private let onClosePins: () -> Void
     private let onQuit: () -> Void
@@ -19,6 +20,7 @@ final class MenuBar {
         onCapture: @escaping () -> Void,
         onFullScreen: @escaping () -> Void,
         onPicker: @escaping () -> Void,
+        onViewer: @escaping () -> Void,
         onSettings: @escaping () -> Void,
         onClosePins: @escaping () -> Void,
         onQuit: @escaping () -> Void
@@ -26,6 +28,7 @@ final class MenuBar {
         self.onCapture = onCapture
         self.onFullScreen = onFullScreen
         self.onPicker = onPicker
+        self.onViewer = onViewer
         self.onSettings = onSettings
         self.onClosePins = onClosePins
         self.onQuit = onQuit
@@ -66,6 +69,10 @@ final class MenuBar {
         menu.addItem(picker)
         self.pickerItem = picker
 
+        let viewer = NSMenuItem(title: "看图", action: #selector(viewerClicked), keyEquivalent: "")
+        viewer.target = self
+        menu.addItem(viewer)
+
         menu.addItem(.separator())
         let closePins = NSMenuItem(
             title: "关闭所有钉图",
@@ -99,6 +106,7 @@ final class MenuBar {
     @objc private func captureClicked() { onCapture() }
     @objc private func fullScreenClicked() { onFullScreen() }
     @objc private func pickerClicked() { onPicker() }
+    @objc private func viewerClicked() { onViewer() }
     @objc private func settingsClicked() { onSettings() }
     @objc private func closePinsClicked() { onClosePins() }
     @objc private func quitClicked() { onQuit() }

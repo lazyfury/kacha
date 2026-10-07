@@ -30,6 +30,7 @@ final class EditorCanvasView: NSView, NSTextFieldDelegate {
         super.init(frame: .zero)
         wantsLayer = true
         layer?.backgroundColor = NSColor(calibratedWhite: 0.08, alpha: 1).cgColor
+        registerForDraggedTypes([.fileURL, .png, .tiff])
     }
 
     @available(*, unavailable)
@@ -59,6 +60,7 @@ final class EditorCanvasView: NSView, NSTextFieldDelegate {
         guard let composed = session.composed else {
             ctx.setFillColor(NSColor(calibratedWhite: 0.08, alpha: 1).cgColor)
             ctx.fill(bounds)
+            drawEmptyHint(bounds: bounds)
             return
         }
         renderer.drawContent(
@@ -279,6 +281,63 @@ final class EditorCanvasView: NSView, NSTextFieldDelegate {
     }
 
     // MARK: - Live Text
+
+    /// Load an image into the editor. Used by drag & drop (and the empty viewer).
+    func loadImage(_ image: CGImage) {
+        guard let composed = Compose.composed(from: image) else { return }
+        session.composed = composed
+        state.textSize = defaultTextSize((composed.width, composed.height))
+        state.hasImage = true
+        needsDisplay = true
+    }
+
+    // MARK: - Drag & drop
+
+    override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
+        Self.draggedImage(from: sender.draggingPasteboard) != nil ? .copy : []
+    }
+
+    override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
+        guard let image = Self.draggedImage(from: sender.draggingPasteboard) else {
+            return false
+        }
+        loadImage(image)
+        return true
+    }
+
+    /// The first image on the pasteboard, from a file URL or raw image data.
+    private static func draggedImage(from pasteboard: NSPasteboard) -> CGImage? {
+        let urls = pasteboard.readObjects(
+            forClasses: [NSURL.self],
+            options: [.urlReadingFileURLsOnly: true]
+        ) as? [URL]
+        if let url = urls?.first,
+            let image = NSImage(contentsOf: url),
+            let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) {
+            return cgImage
+        }
+        if let data = pasteboard.data(forType: .png) ?? pasteboard.data(forType: .tiff),
+            let image = NSImage(data: data),
+            let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) {
+            return cgImage
+        }
+        return nil
+    }
+
+    /// The empty-state hint shown before an image is dropped in.
+    private func drawEmptyHint(bounds: CGRect) {
+        let attributed = NSAttributedString(
+            string: "拖入图片开始编辑",
+            attributes: [
+                .font: NSFont.systemFont(ofSize: 15),
+                .foregroundColor: NSColor(calibratedWhite: 0.7, alpha: 1),
+            ]
+        )
+        let size = attributed.size()
+        attributed.draw(
+            at: CGPoint(x: bounds.midX - size.width / 2, y: bounds.midY - size.height / 2)
+        )
+    }
 
     /// Toggle in-place text selection over the drawn image.
     func toggleLiveText() {

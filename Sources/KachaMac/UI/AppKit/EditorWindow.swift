@@ -20,6 +20,16 @@ final class EditorWindow: NSObject, NSWindowDelegate {
 
     /// Open an editor for `session` (the composed image lives in it).
     func show(session: CaptureSession) {
+        open(session: session, title: "kacha — 编辑")
+    }
+
+    /// Open an empty editor. The tools stay disabled until an image is dropped
+    /// in; after that the flow is identical to the capture editor.
+    func showViewer() {
+        open(session: CaptureSession(), title: "kacha — 看图")
+    }
+
+    private func open(session: CaptureSession, title: String) {
         close()
 
         let composed = session.composed
@@ -35,6 +45,7 @@ final class EditorWindow: NSObject, NSWindowDelegate {
         if let composed {
             state.textSize = defaultTextSize((composed.width, composed.height))
         }
+        state.hasImage = composed != nil
         self.state = state
         self.session = session
 
@@ -47,7 +58,7 @@ final class EditorWindow: NSObject, NSWindowDelegate {
             backing: .buffered,
             defer: false
         )
-        window.title = "kacha — 编辑"
+        window.title = title
         // ARC owns this window; AppKit must not also release it on close.
         WindowChrome.own(window)
         window.delegate = self
@@ -101,6 +112,11 @@ final class EditorWindow: NSObject, NSWindowDelegate {
     /// Debug: render the editor's current image (the `--smoke-export` path).
     func exportForSmoke() -> Data? {
         canvas?.renderExport()
+    }
+
+    /// Debug: load an image into the open editor (the `--smoke-viewer` path).
+    func loadForSmoke(_ image: CGImage) {
+        canvas?.loadImage(image)
     }
 
     func windowWillClose(_ notification: Notification) {

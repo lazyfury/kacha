@@ -16,6 +16,8 @@
 - **编辑窗**：预览 + 标注（矩形 / 箭头 / 画笔 / 高亮 / 文字 / 马赛克）+ 撤销重做；
   复制到剪贴板、保存 PNG、钉在桌面；**OCR 文字识别**（系统 Vision，离线）。
 - **取色器**：在冻帧上取样，放大镜 + hex，点击复制。
+- **看图模式**：菜单栏「看图」开一个空编辑窗（工具禁用），拖入图片后进入和截图一样的
+  标注 / 导出 / OCR 流程。
 - **零第三方依赖**：界面用 AppKit / Core Graphics 画，抓屏用系统 ScreenCaptureKit。
 
 ### 1.1 非目标（MVP 不做）
@@ -239,6 +241,14 @@ iPhone 相册一致）。开启时画布暂停画标注，`Esc` 或再点按钮�
 `VisionKit`。`--smoke-ocr` 用 CoreText 渲染已知文字再经 `ImageAnalyzer` 识别并断言，覆盖
 文本路径且不需要录屏权限。
 
+### 4.11 看图模式
+
+菜单栏「看图」用同一个 `EditorWindow` 开一个空窗（`session.composed == nil`）：画布画空态
+提示「拖入图片开始编辑」，工具栏按钮在 `state.hasImage == false` 时全部禁用（只有关闭可用）。
+把图片（文件 URL / PNG / TIFF）拖到画布上，`EditorCanvasView` 的 `NSDraggingDestination`
+读成 `CGImage` → `Compose.composed(from:)` 写回 `session.composed` 并置 `state.hasImage`，
+之后的标注 / 复制 / 保存 / 钉图 / OCR 流程与截图完全一致。
+
 ---
 
 ## 5. 数据流（时序）
@@ -274,9 +284,10 @@ iPhone 相册一致）。开启时画布暂停画标注，`Esc` 或再点按钮�
 - **不写截图 / 录屏测试**（见 AGENTS 硬规则）。
 - `--selfcheck`：纯逻辑断言，无窗口、无屏幕录制权限、无 XCTest。覆盖坐标 / 裁剪 / PNG /
   标注栅格化等纯函数。
-- `--smoke-settings` / `--smoke-editor` / `--smoke-export` / `--smoke-ocr`：真实开 / 关
-  窗口路径与 Vision 识别路径，回归 `isReleasedWhenClosed` 崩溃与编辑窗生命周期。
-- `scripts/dev.sh` 串起 build + selfcheck + 四个 smoke。
+- `--smoke-settings` / `--smoke-editor` / `--smoke-export` / `--smoke-ocr` / `--smoke-viewer`：
+  真实开 / 关窗口路径、Vision 识别路径与看图空窗拖放路径，回归 `isReleasedWhenClosed`
+  崩溃与编辑窗生命周期。
+- `scripts/dev.sh` 串起 build + selfcheck + 五个 smoke。
 
 ---
 

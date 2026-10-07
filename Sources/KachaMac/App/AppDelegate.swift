@@ -33,6 +33,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             onCapture: { [weak self] in self?.startCapture() },
             onFullScreen: { [weak self] in self?.startFullScreenCapture() },
             onPicker: { [weak self] in self?.startColorPicker() },
+            onViewer: { [weak self] in self?.openViewer() },
             onSettings: { [weak self] in self?.settings.show() },
             onClosePins: { [weak self] in self?.pins.closeAll() },
             onQuit: { NSApp.terminate(nil) }
@@ -70,6 +71,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         if options.smokeOCR {
             runOCRSmoke()
+        }
+        if options.smokeViewer {
+            runViewerSmoke()
         }
     }
 
@@ -123,6 +127,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         appMenu.addItem(picker)
         self.pickerMenuItem = picker
 
+        let viewer = NSMenuItem(title: "看图", action: #selector(openViewer), keyEquivalent: "")
+        viewer.target = self
+        appMenu.addItem(viewer)
+
         let settings = NSMenuItem(title: "设置…", action: #selector(openSettings), keyEquivalent: ",")
         settings.keyEquivalentModifierMask = [.command]
         settings.target = self
@@ -147,6 +155,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func openSettings() {
         settings.show()
+    }
+
+    @objc private func openViewer() {
+        editor.showViewer()
     }
 
     // MARK: - Capture
@@ -381,25 +393,55 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return ctx.makeImage()
     }
 
+    /// Debug (`--smoke-viewer`): open the empty viewer, load an image into it
+    /// and export — the empty-window and drag-and-drop load path.
+    private func runViewerSmoke() {
+        editor.showViewer()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
+            guard let self, let image = Self.syntheticImage() else {
+                exit(1)
+            }
+            self.editor.loadForSmoke(image)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+                let ok = self.editor.exportForSmoke() != nil
+                FileHandle.standardError.write(
+                    Data("kacha smoke-viewer load: \(ok ? "ok" : "FAILED")\n".utf8)
+                )
+                self.editor.close()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                    exit(ok ? 0 : 1)
+                }
+            }
+        }
+    }
+
     /// A 64×64 red composed image, for the smoke tests.
     private static func syntheticSession() -> CaptureSession {
         let session = CaptureSession()
-        let colorSpace = CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB()
-        if let ctx = CGContext(
-            data: nil,
-            width: 64,
-            height: 64,
-            bitsPerComponent: 8,
-            bytesPerRow: 0,
-            space: colorSpace,
-            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
-        ) {
-            ctx.setFillColor(CGColor(srgbRed: 1, green: 0, blue: 0, alpha: 1))
-            ctx.fill(CGRect(x: 0, y: 0, width: 64, height: 64))
-            if let image = ctx.makeImage() {
-                session.composed = Compose.composed(from: image)
-            }
+        if let image = syntheticImage(), let composed = Compose.composed(from: image) {
+            session.composed = composed
         }
         return session
+    }
+
+    /// A 64×64 red bitmap, for the smoke tests.
+    private static func syntheticImage() -> CGImage? {
+        let colorSpace = CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB()
+        guard
+            let ctx = CGContext(
+                data: nil,
+                width: 64,
+                height: 64,
+                bitsPerComponent: 8,
+                bytesPerRow: 0,
+                space: colorSpace,
+                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+            )
+        else {
+            return nil
+        }
+        ctx.setFillColor(CGColor(srgbRed: 1, green: 0, blue: 0, alpha: 1))
+        ctx.fill(CGRect(x: 0, y: 0, width: 64, height: 64))
+        return ctx.makeImage()
     }
 }
