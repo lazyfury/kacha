@@ -79,6 +79,9 @@ final class EditorWindow: NSObject, NSWindowDelegate {
         window.contentView = NSHostingView(rootView: root)
 
         window.center()
+        // The app is a menu-bar accessory, so opening a window must also make the
+        // app active or the window lands behind the frontmost app.
+        NSApp.activate(ignoringOtherApps: true)
         window.makeKeyAndOrderFront(nil)
         window.makeFirstResponder(canvas)
         self.window = window

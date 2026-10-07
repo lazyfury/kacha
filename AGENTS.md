@@ -125,6 +125,6 @@ SwiftPM 递归编译子目录，**加文件夹不用改 `Package.swift`**。
 | 钉图 / 设置 / 热键录制 | `Sources/KachaMac/UI/AppKit/PinWindows.swift`、`UI/SwiftUI/SettingsWindow.swift`、`HotkeyRecorderView.swift` |
 | 截图提示音（系统音效，无资源文件） | `Sources/KachaMac/Helper/ShotSound.swift` |
 | OCR 合并 / sheet（VisionKit transcript） | `Sources/KachaMac/Helper/OCR.swift`、`UI/SwiftUI/OCRResultView.swift` |
-| 原位选字（VisionKit Live Text） | `Sources/KachaMac/UI/AppKit/LiveTextOverlay.swift` |
+| 识别文字（VisionKit Live Text 原位选字） | `Sources/KachaMac/UI/AppKit/LiveTextOverlay.swift` |
 | PNG 导出 | `Sources/KachaMac/Helper/PNG.swift` |
 | 打包 / 脚本 | `packaging/Info.plist`、`scripts/` |

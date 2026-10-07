@@ -51,7 +51,7 @@ enum ToolbarSymbol {
     static let close = "xmark"
     static let fillOff = "square"
     static let fillOn = "square.fill"
-    static let selectText = "text.cursor"
+    static let selectText = "text.viewfinder"
 
     /// Every symbol the toolbar may show (the self-check resolves them all).
     static var all: [String] {

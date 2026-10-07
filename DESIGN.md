@@ -92,7 +92,7 @@ kacha/
 │   │   │   ├── EditorWindow.swift      # 编辑窗（NSWindow 宿主）
 │   │   │   ├── EditorCanvasView.swift  # 画布：鼠标 / 文字输入 / 导出
 │   │   │   ├── AnnotationRenderer.swift # 标注栅格化（预览与导出共用）
-│   │   │   ├── LiveTextOverlay.swift    # VisionKit 原位选字覆盖层
+│   │   │   ├── LiveTextOverlay.swift    # VisionKit 识别文字（原位选字）覆盖层
 │   │   │   ├── PinWindows.swift        # 钉图悬浮窗
 │   │   │   ├── ColorPicker.swift       # 放大镜 + 像素取样 + hex
 │   │   │   └── WindowChrome.swift      # 窗口 chrome / isReleasedWhenClosed 统一设置
@@ -231,7 +231,7 @@ marker 工具，用 `defaultMarkerStroke`（最小 16px）的粗笔刷。
 
 ### 4.10 OCR 文字识别（系统 VisionKit）
 
-离线、无第三方，只有一条路径：工具栏「原位选字」开关用
+离线、无第三方，只有一条路径：工具栏「识别文字」开关（`text.viewfinder`）用
 `VisionKit.ImageAnalysisOverlayView`（`.textSelection`）+ `ImageAnalyzer`，在画布上按
 `state.imageRect` 叠一个对齐的 `NSImageView` + 覆盖层，直接在图上拖选、右键复制（和
 iPhone 相册一致）。开启时画布暂停画标注，`Esc` 或再点按钮退出。

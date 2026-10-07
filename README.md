@@ -23,7 +23,7 @@ macOS 截图工具。**纯 Swift**：AppKit 管窗口、Core Graphics 画界面�
 - **编辑窗**：矩形（可填充）/ 箭头 / 画笔 / 文字（支持 IME，**可二次编辑**）/
   **半透明粗笔高亮** / **可涂抹马赛克** + 撤销重做；工具栏是 SwiftUI **Liquid Glass** 浮条，
   颜色（8 色）与线宽（4 档）可选，画布仍是 AppKit。
-  复制到剪贴板、保存 PNG、钉到桌面；**OCR 文字识别**：图上**原位选字**直接复制（系统 VisionKit，像 iPhone 相册），右键菜单可「复制全部文字」/「显示全部文字…」开 sheet（带「合并换行」）。钉图是可交互的置顶悬浮图：拖拽移动、**拖四角缩放
+  复制到剪贴板、保存 PNG、钉到桌面；**OCR 文字识别**：图上**识别文字**直接拖选复制（系统 VisionKit，像 iPhone 相册），右键菜单可「复制全部文字」/「显示全部文字…」开 sheet（带「合并换行」）。钉图是可交互的置顶悬浮图：拖拽移动、**拖四角缩放
   （锁宽高比）**、悬停左上角关闭、右键菜单（复制 / 保存 / 关闭）、双击或 `Esc` 关闭；
   菜单栏还有「关闭所有钉图」。
 - **设置**：自定义截图 / 全屏 / 取色三个全局热键、开机自启。
@@ -52,7 +52,7 @@ Sources/KachaMac/
     EditorWindow.swift    编辑窗（NSWindow 宿主）
     EditorCanvasView.swift 画布：鼠标 / 文字输入 / 导出
     AnnotationRenderer.swift 标注栅格化（预览与导出共用）
-    LiveTextOverlay.swift VisionKit 原位选字覆盖层
+    LiveTextOverlay.swift VisionKit 识别文字覆盖层
     PinWindows.swift      钉图悬浮窗
     ColorPicker.swift     取色器放大镜 + hex
     WindowChrome.swift    窗口 chrome / isReleasedWhenClosed 统一设置

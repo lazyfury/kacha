@@ -131,9 +131,10 @@ private struct EditorToolbar: View {
 
             ToolbarButton(
                 symbol: ToolbarSymbol.selectText,
-                title: "原位选字",
+                title: "识别文字",
                 active: state.liveTextActive,
                 disabled: !hasImage,
+                showsLabel: true,
                 action: onSelectText
             )
             ToolbarButton(
