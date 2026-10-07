@@ -18,7 +18,7 @@ struct EditorRootView: View {
 
     @State private var ocrLines: [String] = []
     @State private var ocrText = ""
-    @State private var showingOCR = false
+    @State private var activeSheet: EditorSheet?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -26,6 +26,7 @@ struct EditorRootView: View {
                 state: state,
                 canvas: canvas,
                 onSelectText: canvas.toggleLiveText,
+                onDetectBarcodes: canvas.detectBarcodes,
                 onCopy: onCopy,
                 onSave: onSave,
                 onPin: onPin,
@@ -37,16 +38,39 @@ struct EditorRootView: View {
         }
         .frame(minWidth: 840, minHeight: 460)
         .ignoresSafeArea()
-        .sheet(isPresented: $showingOCR) {
-            OCRResultView(text: $ocrText, lines: ocrLines) { showingOCR = false }
+        // One sheet, switched by an item: two `.sheet(isPresented:)` on the same
+        // view fight each other and the second never presents on its own.
+        .sheet(item: $activeSheet) { sheet in
+            switch sheet {
+            case .ocr:
+                OCRResultView(text: $ocrText, lines: ocrLines) { activeSheet = nil }
+            case .barcode(let codes):
+                BarcodeResultView(codes: codes) { activeSheet = nil }
+            }
         }
         .onAppear {
             canvas.onShowAllText = { text in
                 ocrLines = text.split(separator: "\n", omittingEmptySubsequences: false)
                     .map(String.init)
                 ocrText = text
-                showingOCR = true
+                activeSheet = .ocr
             }
+            canvas.onShowBarcodes = { codes in
+                activeSheet = .barcode(codes)
+            }
+        }
+    }
+}
+
+/// The editor's modal sheets (only one can be up at a time).
+private enum EditorSheet: Identifiable {
+    case ocr
+    case barcode([ScannedCode])
+
+    var id: String {
+        switch self {
+        case .ocr: return "ocr"
+        case .barcode: return "barcode"
         }
     }
 }
@@ -67,6 +91,7 @@ private struct EditorToolbar: View {
     @ObservedObject var state: EditorState
     let canvas: EditorCanvasView
     let onSelectText: () -> Void
+    let onDetectBarcodes: () -> Void
     let onCopy: () -> Void
     let onSave: () -> Void
     let onPin: () -> Void
@@ -136,6 +161,13 @@ private struct EditorToolbar: View {
                 disabled: !hasImage,
                 showsLabel: true,
                 action: onSelectText
+            )
+            ToolbarButton(
+                symbol: ToolbarSymbol.barcode,
+                title: "识别二维码",
+                active: false,
+                disabled: !hasImage,
+                action: onDetectBarcodes
             )
             ToolbarButton(
                 symbol: ToolbarSymbol.copy,

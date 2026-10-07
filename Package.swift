@@ -35,9 +35,11 @@ let package = Package(
                 .linkedFramework("MetalKit"),
                 .linkedFramework("QuartzCore"),
                 .linkedFramework("CoreGraphics"),
+                .linkedFramework("CoreImage"),
                 .linkedFramework("CoreFoundation"),
                 .linkedFramework("ScreenCaptureKit"),
                 .linkedFramework("Carbon"),
+                .linkedFramework("Vision"),
                 .linkedFramework("VisionKit"),
             ]
         ),

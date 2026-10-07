@@ -4,6 +4,8 @@
 
 import AppKit
 import CoreGraphics
+import CoreImage
+import CoreImage.CIFilterBuiltins
 import Foundation
 
 @MainActor
@@ -25,6 +27,7 @@ enum SelfCheck {
         checkHotkeys(check)
         checkExport(check)
         checkOCR(check)
+        checkBarcode(check)
         checkSound(check)
 
         print(failures == 0 ? "selfcheck: ok" : "selfcheck: \(failures) failure(s)")
@@ -359,6 +362,25 @@ enum SelfCheck {
             OCR.joinLines(["你好", "世界"], merged: true) == "你好世界",
             "joinLines joins CJK lines without a space"
         )
+    }
+
+    /// A generated QR must round-trip through Vision's barcode detector.
+    private static func checkBarcode(_ check: (Bool, String) -> Void) {
+        guard let qr = qrImage("KACHA-7788"), let composed = Compose.composed(from: qr) else {
+            check(false, "could not render the test QR")
+            return
+        }
+        let codes = BarcodeReader.detectSync(in: composed.image)
+        check(codes.contains { $0.payload == "KACHA-7788" }, "detects a QR payload")
+    }
+
+    /// A QR code bitmap via Core Image, for the barcode check.
+    private static func qrImage(_ payload: String) -> CGImage? {
+        let filter = CIFilter.qrCodeGenerator()
+        filter.message = Data(payload.utf8)
+        guard let output = filter.outputImage else { return nil }
+        let scaled = output.transformed(by: CGAffineTransform(scaleX: 10, y: 10))
+        return CIContext().createCGImage(scaled, from: scaled.extent)
     }
 
     /// The fallback must always resolve; the exact system capture sound is not a

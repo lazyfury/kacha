@@ -116,6 +116,12 @@ final class EditorWindow: NSObject, NSWindowDelegate {
         canvas?.renderExport()
     }
 
+    /// Debug: decode the editor's current image (the `--smoke-barcode` path).
+    func detectBarcodesForSmoke(_ completion: @escaping ([ScannedCode]) -> Void) {
+        canvas?.onShowBarcodes = { codes in completion(codes) }
+        canvas?.detectBarcodes()
+    }
+
     /// Debug: load an image into the open editor (the `--smoke-viewer` path).
     func loadForSmoke(_ image: CGImage) {
         canvas?.loadImage(image)

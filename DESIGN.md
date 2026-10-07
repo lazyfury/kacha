@@ -101,6 +101,7 @@ kacha/
 │   │   └── SwiftUI/              # NSHostingView 承载的 chrome
 │   │       ├── EditorRootView.swift     # 编辑窗：玻璃工具栏 + 画布 representable
 │   │       ├── OCRResultView.swift      # OCR 识别结果 sheet（可编辑 / 复制）
+│   │       ├── BarcodeResultView.swift  # 二维码 / 条码结果 sheet（逐条复制）
 │   │       ├── SettingsWindow.swift     # 设置窗（NSWindow 宿主）
 │   │       ├── SettingsRootView.swift   # 设置窗：系统设置风顶栏 / 卡片 / 底栏
 │   │       └── HotkeyRecorderView.swift # 热键录制按钮 + 本地 NSEvent 监听
@@ -112,6 +113,7 @@ kacha/
 │       ├── PNG.swift             # ImageIO PNG 编码
 │       ├── Export.swift          # 剪贴板 / 保存面板（编辑器与钉图共用）
 │       ├── OCR.swift             # VisionKit 文本分析 + 合并换行
+│       ├── Barcode.swift         # Vision 二维码 / 条码解码
 │       ├── ShotSound.swift       # 系统截图提示音
 │       └── SelfCheck.swift       # --selfcheck 纯逻辑断言
 ├── packaging/Info.plist          # LSUIElement=true、LSMinimumSystemVersion=14.0
@@ -246,6 +248,12 @@ iPhone 相册一致）。开启时画布暂停画标注，`Esc` 或再点按钮�
 `VisionKit`。`--smoke-ocr` 用 CoreText 渲染已知文字再经 `ImageAnalyzer` 识别并断言，覆盖
 文本路径且不需要录屏权限。
 
+二维码 / 条码是另一条独立的 Vision 路径：工具栏「识别二维码」按钮（`barcode.viewfinder`，
+图标按钮）调 `BarcodeReader.detect`（`VNDetectBarcodesRequest`，`detectSync` 是同步核心，
+跑在后台队列），结果交给 `BarcodeResultView` sheet，逐条或全部复制。`--selfcheck` 用
+Core Image 的 `CIQRCodeGenerator` 生成一个 QR 再解码断言（`--smoke-barcode` 也走编辑窗
+里的 `detectBarcodes` 回调，不需要录屏权限）。
+
 ### 4.11 看图模式
 
 菜单栏「看图」用同一个 `EditorWindow` 开一个空窗（`session.composed == nil`）：画布画空态
@@ -297,10 +305,10 @@ iPhone 相册一致）。开启时画布暂停画标注，`Esc` 或再点按钮�
 - **不写截图 / 录屏测试**（见 AGENTS 硬规则）。
 - `--selfcheck`：纯逻辑断言，无窗口、无屏幕录制权限、无 XCTest。覆盖坐标 / 裁剪 / PNG /
   标注栅格化等纯函数。
-- `--smoke-settings` / `--smoke-editor` / `--smoke-export` / `--smoke-ocr` / `--smoke-viewer`：
-  真实开 / 关窗口路径、Vision 识别路径与看图空窗拖放路径，回归 `isReleasedWhenClosed`
-  崩溃与编辑窗生命周期。
-- `scripts/dev.sh` 串起 build + selfcheck + 五个 smoke。
+- `--smoke-settings` / `--smoke-editor` / `--smoke-export` / `--smoke-ocr` / `--smoke-viewer` /
+  `--smoke-barcode`：真实开 / 关窗口路径、Vision 文字与条码识别路径与看图空窗拖放路径，回归
+  `isReleasedWhenClosed` 崩溃与编辑窗生命周期。
+- `scripts/dev.sh` 串起 build + selfcheck + 六个 smoke。
 
 ---
 

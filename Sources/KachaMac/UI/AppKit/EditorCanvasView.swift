@@ -15,6 +15,8 @@ final class EditorCanvasView: NSView, NSTextFieldDelegate {
 
     /// Called when Live Text asks to show the full recognized transcript.
     var onShowAllText: ((String) -> Void)?
+    /// Called with the decoded QR / barcodes when detection finishes.
+    var onShowBarcodes: (([ScannedCode]) -> Void)?
 
     private let renderer = AnnotationRenderer()
     private var liveText: LiveTextOverlay?
@@ -364,6 +366,16 @@ final class EditorCanvasView: NSView, NSTextFieldDelegate {
     /// Toggle in-place text selection over the drawn image.
     func toggleLiveText() {
         setLiveText(active: liveText == nil)
+    }
+
+    /// Decode any QR / barcode in the composed image and hand the results to the
+    /// sheet callback (off the main thread).
+    func detectBarcodes() {
+        guard let image = session.composed?.image else { return }
+        Task { @MainActor in
+            let codes = await BarcodeReader.detect(in: image)
+            onShowBarcodes?(codes)
+        }
     }
 
     private func setLiveText(active: Bool) {

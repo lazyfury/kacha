@@ -6,6 +6,8 @@
 
 import AppKit
 import CoreGraphics
+import CoreImage
+import CoreImage.CIFilterBuiltins
 import CoreText
 import ScreenCaptureKit
 
@@ -80,6 +82,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         if options.smokeViewer {
             runViewerSmoke()
+        }
+        if options.smokeBarcode {
+            runBarcodeSmoke()
         }
     }
 
@@ -449,6 +454,48 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 }
             }
         }
+    }
+
+    /// Debug (`--smoke-barcode`): open the editor on a generated QR, decode it
+    /// and check the payload — the barcode path with no screen-recording
+    /// permission.
+    private func runBarcodeSmoke() {
+        guard let qr = Self.qrImage("KACHA-7788") else {
+            FileHandle.standardError.write(Data("kacha smoke-barcode: FAILED (render)\n".utf8))
+            exit(1)
+        }
+        editor.show(session: Self.syntheticSession(image: qr))
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
+            self?.editor.detectBarcodesForSmoke { codes in
+                let ok = codes.contains { $0.payload == "KACHA-7788" }
+                let found = codes.map(\.payload).joined(separator: " | ")
+                FileHandle.standardError.write(
+                    Data("kacha smoke-barcode: \(ok ? "ok" : "FAILED") [\(found)]\n".utf8)
+                )
+                self?.editor.close()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                    exit(ok ? 0 : 1)
+                }
+            }
+        }
+    }
+
+    /// A QR code bitmap via Core Image, for the barcode smoke.
+    private static func qrImage(_ payload: String) -> CGImage? {
+        let filter = CIFilter.qrCodeGenerator()
+        filter.message = Data(payload.utf8)
+        guard let output = filter.outputImage else { return nil }
+        let scaled = output.transformed(by: CGAffineTransform(scaleX: 10, y: 10))
+        return CIContext().createCGImage(scaled, from: scaled.extent)
+    }
+
+    /// A composed session over `image`, for the smoke tests.
+    private static func syntheticSession(image: CGImage) -> CaptureSession {
+        let session = CaptureSession()
+        if let composed = Compose.composed(from: image) {
+            session.composed = composed
+        }
+        return session
     }
 
     /// A 64×64 red composed image, for the smoke tests.
