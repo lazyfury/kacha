@@ -122,6 +122,7 @@ final class SelectionView: NSView {
             drawSelection(ctx, local, viewport: viewport)
         }
         drawCrosshair(ctx, viewport: viewport)
+        drawHint(ctx, viewport: viewport)
     }
 
     /// The selection border, handles and size label.
@@ -162,6 +163,40 @@ final class SelectionView: NSView {
         ctx.setFillColor(Self.crosshair)
         ctx.fill(CGRect(x: p.x, y: 0, width: 1, height: viewport.height))
         ctx.fill(CGRect(x: 0, y: p.y, width: viewport.width, height: 1))
+    }
+
+    /// The bottom-centre instruction pill: confirm / full-screen / cancel.
+    private func drawHint(_ ctx: CGContext, viewport: CGRect) {
+        let text = "Enter 完成 · 点击空白处截全屏 · Esc 取消"
+        let attributed = NSAttributedString(
+            string: text,
+            attributes: [
+                .font: NSFont.systemFont(ofSize: 12),
+                .foregroundColor: NSColor.white,
+            ]
+        )
+        let size = attributed.size()
+        let padX: CGFloat = 12
+        let padY: CGFloat = 6
+        let boxW = size.width + padX * 2
+        let boxH = size.height + padY * 2
+        let box = CGRect(
+            x: viewport.midX - boxW / 2,
+            y: viewport.maxY - boxH - 24,
+            width: boxW,
+            height: boxH
+        )
+        ctx.setFillColor(NSColor(calibratedWhite: 0, alpha: 0.6).cgColor)
+        ctx.addPath(
+            CGPath(
+                roundedRect: box,
+                cornerWidth: boxH / 2,
+                cornerHeight: boxH / 2,
+                transform: nil
+            )
+        )
+        ctx.fillPath()
+        attributed.draw(at: CGPoint(x: box.minX + padX, y: box.minY + padY))
     }
 
     private func sizeText(_ rect: CGRect) -> String {

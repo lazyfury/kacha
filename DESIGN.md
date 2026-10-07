@@ -160,6 +160,13 @@ marker 工具，用 `defaultMarkerStroke`（最小 16px）的粗笔刷。
 - **马赛克**：`Mosaic.make` 把整张合成图按 `mosaicBlock` 做一次块平均并缓存，绘制时用
   `replacePathWithStrokedPath()` 把 freehand 折线变成粗笔刷轮廓 `clip()`，再把块平均图
   无插值放大画进去。所以是「涂抹」而不是拖矩形，而且每次重绘不重算平均色。
+- **矩形填充**：`Annotation.filled` 存在标注上；填充用颜色 alpha 0.35，然后再描边。
+- **颜色 / 线宽**：工具栏改的是 `EditorState.color`（8 色）与 `strokeFactor`（乘
+  `defaultStroke(image)`，4 档）；新建标注时快照到 `Annotation`。高亮的半透明色从所选颜色
+  派生（alpha 0.35）。
+- **文字二次编辑**：文字工具点已有文字（或双击，任意工具）进入编辑；命中用
+  `NSAttributedString.size()` 在图像像素里算包围盒；编辑时隐藏原标注、提交时原地替换，
+  清空则删除。
 
 ### 4.8 UI 框架与 Liquid Glass
 
@@ -198,7 +205,7 @@ marker 工具，用 `defaultMarkerStroke`（最小 16px）的粗笔刷。
 ## 6. 热键与权限
 
 - 全局热键用 Carbon `RegisterEventHotKey`：**不需要辅助功能权限**，且能拦到其他 app 的按键。
-  默认截图 `⌘⇧A`、取色 `⌘⇧C`，在设置窗里可改（`HotkeyRecorderView`）。
+  默认截图 `⌘⇧A`、全屏 `⌘⇧F`、取色 `⌘⇧C`，在设置窗里可改（`HotkeyRecorderView`）。
 - 屏幕录制是 per-user TCC：首次抓屏前用 `CGPreflightScreenCaptureAccess` /
   `CGRequestScreenCaptureAccess` 引导，授予后需重启 app。
 - 开机自启用 `SMAppService`（macOS 13+），只在真正的 `.app` bundle 里有意义。
@@ -218,9 +225,8 @@ marker 工具，用 `defaultMarkerStroke`（最小 16px）的粗笔刷。
 
 ## 8. 已知缺口 / 后续
 
-- 形状 / 画笔固定红色 2px，文字固定 18px（按对角线缩放）；没有颜色 / 线宽选择器。
-  高亮固定半透明黄、马赛克涂抹，宽度按对角线缩放（最小 16px）。
-- 文字提交后不能二次编辑（可撤销）。
+- 形状 / 画笔的线宽有 4 档预设、颜色 8 色预设，但没有连续滑块 / 自定义取色。
+- 文字字号仍按对角线派生（没有字号选择器）；文字可点选 / 双击二次编辑。
 - 窗口拾取不做 app 级分组 / 子窗口选择。
 - 序号 / 椭圆 / 裁剪 / 延时 / OCR / 滚屏长图未做。
 - 多显示器非均匀缩放下的跨屏拼接以最大 scale 兜底，尚未逐屏混合。

@@ -10,6 +10,7 @@ struct SettingsRootView: View {
 
     @State private var captureHotkey = Preferences.captureHotkey
     @State private var pickerHotkey = Preferences.pickerHotkey
+    @State private var fullScreenHotkey = Preferences.fullScreenHotkey
     @State private var launchAtLogin = LaunchAtLogin.isEnabled
 
     private let loginAvailable = LaunchAtLogin.isAvailable
@@ -25,6 +26,12 @@ struct SettingsRootView: View {
             row("取色器快捷键") {
                 HotkeyRecorder(hotkey: $pickerHotkey) { hotkey in
                     Preferences.pickerHotkey = hotkey
+                    onHotkeyChange()
+                }
+            }
+            row("全屏快捷键") {
+                HotkeyRecorder(hotkey: $fullScreenHotkey) { hotkey in
+                    Preferences.fullScreenHotkey = hotkey
                     onHotkeyChange()
                 }
             }
@@ -80,8 +87,10 @@ struct SettingsRootView: View {
     private func resetHotkeys() {
         captureHotkey = .default
         pickerHotkey = .pickerDefault
+        fullScreenHotkey = .fullScreenDefault
         Preferences.captureHotkey = .default
         Preferences.pickerHotkey = .pickerDefault
+        Preferences.fullScreenHotkey = .fullScreenDefault
         onHotkeyChange()
     }
 

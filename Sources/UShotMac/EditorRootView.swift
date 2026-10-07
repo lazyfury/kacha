@@ -29,7 +29,7 @@ struct EditorRootView: View {
             )
             .padding(.top, 12)
         }
-        .frame(minWidth: 640, minHeight: 460)
+        .frame(minWidth: 720, minHeight: 460)
     }
 }
 
@@ -65,6 +65,19 @@ private struct EditorToolbar: View {
                 ) {
                     state.tool = tool
                 }
+            }
+
+            separator
+
+            ColorMenu(color: $state.color)
+            StrokeMenu(factor: $state.strokeFactor)
+            ToolbarButton(
+                symbol: state.rectangleFilled ? ToolbarSymbol.fillOn : ToolbarSymbol.fillOff,
+                title: "矩形填充",
+                active: state.rectangleFilled,
+                disabled: false
+            ) {
+                state.rectangleFilled.toggle()
             }
 
             separator
@@ -180,6 +193,72 @@ private struct ToolbarButton: View {
         .opacity(disabled ? 0.35 : 1)
         .help(title)
         .accessibilityLabel(title)
+    }
+}
+
+/// The colour picker: a swatch that opens a menu of preset colours.
+private struct ColorMenu: View {
+    @Binding var color: [CGFloat]
+
+    var body: some View {
+        Menu {
+            ForEach(AnnotationPalette.colors, id: \.self) { entry in
+                Button {
+                    color = entry.rgba
+                } label: {
+                    if entry.rgba == color {
+                        Label(entry.name, systemImage: "checkmark")
+                    } else {
+                        Text(entry.name)
+                    }
+                }
+            }
+        } label: {
+            Circle()
+                .fill(Color(red: color[0], green: color[1], blue: color[2]))
+                .frame(width: 15, height: 15)
+                .overlay(Circle().strokeBorder(Color.primary.opacity(0.25), lineWidth: 1))
+                .frame(width: 28, height: 26)
+                .contentShape(Rectangle())
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help("颜色")
+    }
+}
+
+/// The stroke-width picker: a line that opens a menu of presets.
+private struct StrokeMenu: View {
+    @Binding var factor: CGFloat
+
+    var body: some View {
+        Menu {
+            ForEach(AnnotationPalette.strokePresets.indices, id: \.self) { index in
+                Button {
+                    factor = AnnotationPalette.strokePresets[index].factor
+                } label: {
+                    if abs(AnnotationPalette.strokePresets[index].factor - factor) < 0.001 {
+                        Label(
+                            AnnotationPalette.strokePresets[index].name,
+                            systemImage: "checkmark"
+                        )
+                    } else {
+                        Text(AnnotationPalette.strokePresets[index].name)
+                    }
+                }
+            }
+        } label: {
+            Capsule()
+                .fill(Color.primary)
+                .frame(width: 18, height: max(2, min(6, factor * 2)))
+                .frame(width: 28, height: 26)
+                .contentShape(Rectangle())
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help("粗细")
     }
 }
 

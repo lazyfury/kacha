@@ -19,6 +19,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var hotkeys: Hotkeys?
     private var captureMenuItem: NSMenuItem?
     private var pickerMenuItem: NSMenuItem?
+    private var fullScreenMenuItem: NSMenuItem?
 
     init(options: LaunchOptions) {
         self.options = options
@@ -84,6 +85,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             Hotkeys.Binding(id: 2, hotkey: Preferences.pickerHotkey) { [weak self] in
                 self?.startColorPicker()
             },
+            Hotkeys.Binding(id: 3, hotkey: Preferences.fullScreenHotkey) { [weak self] in
+                self?.startFullScreenCapture()
+            },
         ])
     }
 
@@ -97,6 +101,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         capture.target = self
         appMenu.addItem(capture)
         self.captureMenuItem = capture
+
+        let fullScreen = NSMenuItem(
+            title: "全屏截图",
+            action: #selector(startFullScreenCapture),
+            keyEquivalent: ""
+        )
+        fullScreen.target = self
+        appMenu.addItem(fullScreen)
+        self.fullScreenMenuItem = fullScreen
 
         let picker = NSMenuItem(title: "取色器", action: #selector(startColorPicker), keyEquivalent: "")
         picker.target = self
@@ -122,6 +135,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func updateMenuShortcuts() {
         apply(Preferences.captureHotkey, to: captureMenuItem)
         apply(Preferences.pickerHotkey, to: pickerMenuItem)
+        apply(Preferences.fullScreenHotkey, to: fullScreenMenuItem)
     }
 
     private func apply(_ hotkey: Hotkey, to item: NSMenuItem?) {
@@ -181,6 +195,49 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 self.presentCaptureError(error)
             }
         }
+    }
+
+    /// Freeze every display and send the display under the cursor straight to
+    /// the editor, skipping the overlay.
+    @objc private func startFullScreenCapture() {
+        guard ScreenPermission.request() else {
+            presentPermissionAlert()
+            return
+        }
+        Task { @MainActor in
+            do {
+                let result = try await Capture.frozenDisplays()
+                guard
+                    let display = Self.display(under: NSEvent.mouseLocation, in: result.displays)
+                        ?? result.displays.first
+                else {
+                    throw CaptureError.noDisplays
+                }
+                let session = CaptureSession()
+                for item in result.displays {
+                    session.setDisplay(item)
+                }
+                session.composed = Compose.composed(from: display.image)
+                self.editor.show(session: session)
+            } catch {
+                self.presentCaptureError(error)
+            }
+        }
+    }
+
+    /// The captured display whose screen contains `point` (AppKit global coords).
+    private static func display(
+        under point: CGPoint,
+        in displays: [CapturedDisplay]
+    ) -> CapturedDisplay? {
+        let screen = NSScreen.screens.first { $0.frame.contains(point) } ?? NSScreen.main
+        guard
+            let number = screen?.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")]
+                as? NSNumber
+        else {
+            return nil
+        }
+        return displays.first { $0.displayID == number.uint32Value }
     }
 
     /// A clicked window: capture it directly (occlusion-safe) into the editor.

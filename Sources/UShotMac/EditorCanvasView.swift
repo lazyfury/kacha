@@ -15,9 +15,11 @@ import CoreText
 final class EditorState: ObservableObject {
     @Published var tool: Tool = .rectangle
     /// RGBA in 0...1.
-    var color: [CGFloat] = [1, 0.2, 0.2, 1]
-    /// Stroke width in image pixels, for the shape tools.
-    var stroke: CGFloat = 2
+    @Published var color: [CGFloat] = AnnotationPalette.colors[0].rgba
+    /// Stroke width as a multiple of `defaultStroke(image)`.
+    @Published var strokeFactor: CGFloat = 1
+    /// Whether the rectangle tool fills its shape.
+    @Published var rectangleFilled = false
     /// Font size in image pixels, for the text tool.
     var textSize: CGFloat = 18
     @Published var annotations: [Annotation] = []
@@ -111,6 +113,8 @@ final class EditorCanvasView: NSView, NSTextFieldDelegate {
     private var dragging = false
     private var textField: NSTextField?
     private var editingPosition: CGPoint?
+    /// The index of the text annotation being re-edited, if any.
+    private var editingAnnotation: Int?
     /// Block-averaged copy of the composed image, built once for the mosaic tool.
     private var mosaicCache: (block: Int, image: CGImage)?
 
@@ -151,7 +155,7 @@ final class EditorCanvasView: NSView, NSTextFieldDelegate {
         guard let composed = session.composed else { return }
         drawImage(ctx, composed.image, in: imageRect)
         let image = (composed.width, composed.height)
-        for annotation in state.annotations {
+        for (index, annotation) in state.annotations.enumerated() where index != editingAnnotation {
             drawAnnotation(ctx, annotation, imageRect: imageRect, image: image)
         }
         if let draft = state.draft {
@@ -186,6 +190,12 @@ final class EditorCanvasView: NSView, NSTextFieldDelegate {
         switch annotation.tool {
         case .rectangle:
             if let rect = rectFrom(points) {
+                if annotation.filled {
+                    ctx.setFillColor(
+                        CGColor(srgbRed: color[0], green: color[1], blue: color[2], alpha: 0.35)
+                    )
+                    ctx.fill(rect)
+                }
                 ctx.setStrokeColor(cgColor)
                 ctx.setLineWidth(width)
                 ctx.stroke(rect)
@@ -326,13 +336,15 @@ final class EditorCanvasView: NSView, NSTextFieldDelegate {
     /// A fresh draft for `tool`. The marker tools get a thick brush and the
     /// highlighter also gets a translucent colour instead of the plain stroke.
     private func makeDraft(tool: Tool, at start: CGPoint, image: (Int, Int)) -> Annotation {
+        let stroke = defaultStroke(image) * state.strokeFactor
+        let marker = max(defaultMarkerStroke(image) * state.strokeFactor, 16)
         switch tool {
         case .highlighter:
             return Annotation(
                 tool: tool,
                 points: [start],
-                color: Self.highlighterColor,
-                stroke: defaultMarkerStroke(image),
+                color: AnnotationPalette.translucent(state.color, alpha: 0.35),
+                stroke: marker,
                 text: ""
             )
         case .mosaic:
@@ -340,22 +352,28 @@ final class EditorCanvasView: NSView, NSTextFieldDelegate {
                 tool: tool,
                 points: [start],
                 color: state.color,
-                stroke: defaultMarkerStroke(image),
+                stroke: marker,
                 text: ""
+            )
+        case .rectangle:
+            return Annotation(
+                tool: tool,
+                points: [start],
+                color: state.color,
+                stroke: stroke,
+                text: "",
+                filled: state.rectangleFilled
             )
         default:
             return Annotation(
                 tool: tool,
                 points: [start],
                 color: state.color,
-                stroke: state.stroke,
+                stroke: stroke,
                 text: ""
             )
         }
     }
-
-    /// Semi-transparent highlighter yellow.
-    private static let highlighterColor: [CGFloat] = [1.0, 0.90, 0.20, 0.35]
 
     // MARK: - Mouse
 
@@ -366,8 +384,16 @@ final class EditorCanvasView: NSView, NSTextFieldDelegate {
         let image = self.image
         guard image.0 > 0, imageRect.contains(position) else { return }
         let start = clampToImage(toImage(imageRect, image, position), image)
+        if event.clickCount == 2, let index = textAnnotationIndex(at: start) {
+            beginText(at: state.annotations[index].points[0], editing: index)
+            return
+        }
         if state.tool == .text {
-            beginText(at: start)
+            if let index = textAnnotationIndex(at: start) {
+                beginText(at: state.annotations[index].points[0], editing: index)
+            } else {
+                beginText(at: start, editing: nil)
+            }
             return
         }
         state.draft = makeDraft(tool: state.tool, at: start, image: image)
@@ -420,22 +446,50 @@ final class EditorCanvasView: NSView, NSTextFieldDelegate {
 
     // MARK: - Text tool
 
-    private func beginText(at position: CGPoint) {
+    /// The index of the topmost text annotation whose box contains `point`.
+    private func textAnnotationIndex(at point: CGPoint) -> Int? {
+        for index in state.annotations.indices.reversed() {
+            let annotation = state.annotations[index]
+            guard annotation.tool == .text, let bounds = textBounds(annotation) else { continue }
+            if bounds.insetBy(dx: -4, dy: -4).contains(point) {
+                return index
+            }
+        }
+        return nil
+    }
+
+    /// The rendered box of a text annotation, in image pixels.
+    private func textBounds(_ annotation: Annotation) -> CGRect? {
+        guard let origin = annotation.points.first, !annotation.text.isEmpty else { return nil }
+        let size = NSAttributedString(
+            string: annotation.text,
+            attributes: [.font: makeFont(annotation.stroke)]
+        ).size()
+        return CGRect(origin: origin, size: size)
+    }
+
+    private func beginText(at position: CGPoint, editing: Int?) {
         let imageRect = state.imageRect
         let image = self.image
-        let size = max(state.textSize * imageRect.width / CGFloat(max(image.0, 1)), 8)
+        let existing = editing.map { state.annotations[$0] }
+        let fontSize = existing?.stroke ?? state.textSize
+        let color = existing?.color ?? state.color
+        let size = max(fontSize * imageRect.width / CGFloat(max(image.0, 1)), 8)
         let screen = toScreen(imageRect, image, position)
-        let field = NSTextField(frame: CGRect(x: screen.x, y: screen.y, width: 240, height: size * 1.6))
+        let field = NSTextField(
+            frame: CGRect(x: screen.x, y: screen.y, width: 240, height: size * 1.6)
+        )
         field.isBordered = false
         field.drawsBackground = false
         field.focusRingType = .none
         field.font = NSFont.systemFont(ofSize: size)
         field.textColor = NSColor(
-            srgbRed: state.color[0],
-            green: state.color[1],
-            blue: state.color[2],
-            alpha: state.color[3]
+            srgbRed: color[0],
+            green: color[1],
+            blue: color[2],
+            alpha: color[3]
         )
+        field.stringValue = existing?.text ?? ""
         field.delegate = self
         field.target = self
         field.action = #selector(commitText)
@@ -443,16 +497,26 @@ final class EditorCanvasView: NSView, NSTextFieldDelegate {
         window?.makeFirstResponder(field)
         textField = field
         editingPosition = position
+        editingAnnotation = editing
         needsDisplay = true
     }
 
     @objc private func commitText() {
         guard let field = textField, let position = editingPosition else { return }
         let text = field.stringValue
+        let editing = editingAnnotation
         textField = nil
         editingPosition = nil
+        editingAnnotation = nil
         field.removeFromSuperview()
-        if !text.isEmpty {
+        if let editing {
+            if text.isEmpty {
+                state.annotations.remove(at: editing)
+            } else {
+                state.annotations[editing].text = text
+            }
+            state.redo.removeAll()
+        } else if !text.isEmpty {
             state.annotations.append(
                 Annotation(
                     tool: .text,

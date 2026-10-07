@@ -32,9 +32,7 @@ final class EditorWindow: NSObject, NSWindowDelegate {
 
         let state = EditorState()
         if let composed {
-            let size = (composed.width, composed.height)
-            state.stroke = defaultStroke(size)
-            state.textSize = defaultTextSize(size)
+            state.textSize = defaultTextSize((composed.width, composed.height))
         }
         self.state = state
         self.session = session
@@ -52,7 +50,7 @@ final class EditorWindow: NSObject, NSWindowDelegate {
         // ARC owns this window; AppKit must not also release it on close.
         window.isReleasedWhenClosed = false
         window.delegate = self
-        window.contentMinSize = NSSize(width: 640, height: 460)
+        window.contentMinSize = NSSize(width: 720, height: 460)
         // macOS 26 chrome: a transparent, seamless titlebar. The title is
         // redundant with the floating toolbar, so it is hidden.
         window.titlebarAppearsTransparent = true

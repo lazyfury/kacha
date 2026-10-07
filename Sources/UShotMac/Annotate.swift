@@ -49,10 +49,42 @@ enum ToolbarSymbol {
     static let save = "square.and.arrow.down"
     static let pin = "pin"
     static let close = "xmark"
+    static let fillOff = "square"
+    static let fillOn = "square.fill"
 
     /// Every symbol the toolbar may show (the self-check resolves them all).
     static var all: [String] {
-        Tool.allCases.map(\.symbol) + [undo, redo, copy, save, pin, close]
+        Tool.allCases.map(\.symbol) + [undo, redo, copy, save, pin, close, fillOff, fillOn]
+    }
+}
+
+/// A named annotation colour (RGBA in 0...1).
+struct AnnotationColor: Hashable {
+    let name: String
+    let rgba: [CGFloat]
+}
+
+/// The toolbar's colour and stroke-width choices.
+enum AnnotationPalette {
+    static let colors: [AnnotationColor] = [
+        AnnotationColor(name: "红", rgba: [1, 0.2, 0.2, 1]),
+        AnnotationColor(name: "橙", rgba: [1, 0.58, 0, 1]),
+        AnnotationColor(name: "黄", rgba: [1, 0.8, 0, 1]),
+        AnnotationColor(name: "绿", rgba: [0.2, 0.78, 0.35, 1]),
+        AnnotationColor(name: "蓝", rgba: [0.16, 0.55, 1, 1]),
+        AnnotationColor(name: "紫", rgba: [0.6, 0.35, 0.9, 1]),
+        AnnotationColor(name: "黑", rgba: [0, 0, 0, 1]),
+        AnnotationColor(name: "白", rgba: [1, 1, 1, 1]),
+    ]
+
+    /// Stroke width as a multiple of the image's default stroke.
+    static let strokePresets: [(name: String, factor: CGFloat)] = [
+        ("细", 0.5), ("标准", 1), ("粗", 2), ("特粗", 3),
+    ]
+
+    /// A translucent version of `rgba` (fills / highlighter).
+    static func translucent(_ rgba: [CGFloat], alpha: CGFloat) -> [CGFloat] {
+        [rgba[0], rgba[1], rgba[2], alpha]
     }
 }
 
@@ -67,6 +99,8 @@ struct Annotation: Equatable {
     /// Stroke width (or font size for text) in image pixels.
     var stroke: CGFloat
     var text: String
+    /// Whether the rectangle tool fills its shape (ignored by other tools).
+    var filled = false
 
     static func between(_ tool: Tool, _ from: CGPoint, _ to: CGPoint) -> Annotation {
         Annotation(tool: tool, points: [from, to], color: [1, 0.2, 0.2, 1], stroke: 2, text: "")

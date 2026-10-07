@@ -216,6 +216,36 @@ enum SelfCheck {
             return
         }
         check(highlighted != plain, "highlighter changes the exported image")
+
+        // A filled rectangle must differ from an outline.
+        let corners = [CGPoint(x: 4, y: 4), CGPoint(x: 36, y: 16)]
+        state.annotations = [
+            Annotation(
+                tool: .rectangle,
+                points: corners,
+                color: [0, 1, 0, 1],
+                stroke: 2,
+                text: "",
+                filled: false
+            ),
+        ]
+        guard let outline = canvas.renderExport() else {
+            check(false, "rectangle export")
+            return
+        }
+        check(outline != plain, "rectangle changes the exported image")
+        state.annotations[0].filled = true
+        guard let filled = canvas.renderExport() else {
+            check(false, "filled rectangle export")
+            return
+        }
+        check(filled != outline, "filled rectangle differs from the outline")
+
+        check(!AnnotationPalette.colors.isEmpty, "palette has colours")
+        check(
+            AnnotationPalette.strokePresets.contains { $0.factor == 1 },
+            "palette has a standard stroke"
+        )
     }
 
     /// Every toolbar SF Symbol must resolve, so a typo cannot silently fall back.

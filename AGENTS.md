@@ -60,6 +60,10 @@ macOS 截图工具。**纯 Swift 应用**：AppKit 管窗口 / 原生事件与�
   不要用 `.borderedProminent` / `.glassProminent` 这类系统按钮样式（会和玻璃图标按钮不成套）。
   `--selfcheck` 会解析 `ToolbarSymbol.all`，拼错直接失败。玻璃风格只在 macOS 26+ 生效——别把
   `glassEffect` 写在 `#available` 外面，否则部署目标 14.0 会报错。
+- **标注样式存在标注上，不读全局。** `color` / `stroke` / `filled` 是 `Annotation` 的字段
+  （新建时从 `EditorState` 快照）；绘制不要去看 `state.color`。工具栏的面板改的是
+  `state.color` / `state.strokeFactor` / `state.rectangleFilled`。文字编辑用
+  `editingAnnotation` 索引在 `commitText` 里原地替换（清空则删除），别 append 新的。
 - **CGContext 画文字 `position` 是基线（baseline），不是左上角。** 要按字体度量（ascent /
   lineHeight）换算；当成左上角会让文字标注上移 / size 标签溢出。
 

@@ -14,6 +14,8 @@ struct Hotkey: Equatable {
     static let `default` = Hotkey(keyCode: 0, modifiers: [.command, .shift], keyLabel: "A")
     /// ⌘⇧C, the default colour-picker shortcut.
     static let pickerDefault = Hotkey(keyCode: 8, modifiers: [.command, .shift], keyLabel: "C")
+    /// ⌘⇧F, the default full-screen-capture shortcut.
+    static let fullScreenDefault = Hotkey(keyCode: 3, modifiers: [.command, .shift], keyLabel: "F")
 
     /// The shortcut modifiers only (not caps lock / fn / numeric pad).
     static let relevantModifiers: NSEvent.ModifierFlags = [.command, .shift, .option, .control]
@@ -51,6 +53,12 @@ enum Preferences {
     static var pickerHotkey: Hotkey {
         get { hotkey("picker", fallback: .pickerDefault) }
         set { setHotkey("picker", newValue) }
+    }
+
+    /// The full-screen-capture shortcut.
+    static var fullScreenHotkey: Hotkey {
+        get { hotkey("fullscreen", fallback: .fullScreenDefault) }
+        set { setHotkey("fullscreen", newValue) }
     }
 
     private static func hotkey(_ name: String, fallback: Hotkey) -> Hotkey {
