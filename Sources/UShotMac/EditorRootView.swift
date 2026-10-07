@@ -104,7 +104,7 @@ private struct EditorToolbar: View {
                 active: false,
                 disabled: false,
                 showsLabel: true,
-                prominent: true,
+                primary: true,
                 action: onSave
             )
             ToolbarButton(
@@ -134,76 +134,47 @@ private struct EditorToolbar: View {
     }
 }
 
-/// One toolbar button: an optional SF Symbol, an optional Chinese label, and a
-/// filled accent capsule when it is the active tool. A `prominent` button uses
-/// the system's primary style instead.
+/// One toolbar button. Every button shares the same flat, self-drawn chrome
+/// (so labels and icons stay consistent on the glass bar): an icon and/ory a
+/// Chinese label, with an accent capsule when it is active or the primary
+/// action.
 private struct ToolbarButton: View {
     let symbol: String?
     let title: String
     let active: Bool
     let disabled: Bool
     var showsLabel = false
-    var prominent = false
+    var primary = false
     let action: () -> Void
 
-    @ViewBuilder
+    private var filled: Bool { active || primary }
+
     var body: some View {
-        if prominent {
-            prominentButton
-        } else {
-            plainButton
-        }
-    }
-
-    /// The primary action: Liquid Glass "prominent" on macOS 26, the standard
-    /// bordered-prominent button otherwise.
-    @ViewBuilder
-    private var prominentButton: some View {
-        if #available(macOS 26.0, *) {
-            styledProminent(.glassProminent)
-        } else {
-            styledProminent(.borderedProminent)
-        }
-    }
-
-    private func styledProminent<S: PrimitiveButtonStyle>(_ style: S) -> some View {
-        Button(action: action) { label }
-            .buttonStyle(style)
-            .disabled(disabled)
-            .help(title)
-            .accessibilityLabel(title)
-    }
-
-    private var plainButton: some View {
         Button(action: action) {
-            label
-                .frame(minWidth: showsLabel ? nil : 28, minHeight: 26)
-                .padding(.horizontal, showsLabel ? 8 : 0)
-                .foregroundStyle(active ? Color.white : Color.primary)
-                .background(
-                    RoundedRectangle(cornerRadius: 7, style: .continuous)
-                        .fill(active ? Color.accentColor : Color.clear)
-                )
-                .contentShape(Rectangle())
+            HStack(spacing: 5) {
+                if let symbol {
+                    Image(systemName: symbol)
+                        .font(.system(size: 14, weight: .medium))
+                }
+                if showsLabel {
+                    Text(title)
+                        .font(.system(size: 12, weight: .medium))
+                }
+            }
+            .frame(minWidth: showsLabel ? nil : 28, minHeight: 26)
+            .padding(.horizontal, showsLabel ? 9 : 0)
+            .foregroundStyle(filled ? Color.white : Color.primary)
+            .background(
+                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    .fill(filled ? Color.accentColor : Color.clear)
+            )
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .disabled(disabled)
         .opacity(disabled ? 0.35 : 1)
         .help(title)
         .accessibilityLabel(title)
-    }
-
-    private var label: some View {
-        HStack(spacing: 5) {
-            if let symbol {
-                Image(systemName: symbol)
-                    .font(.system(size: 14, weight: .medium))
-            }
-            if showsLabel {
-                Text(title)
-                    .font(.system(size: 12, weight: .medium))
-            }
-        }
     }
 }
 

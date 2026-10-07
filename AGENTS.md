@@ -56,9 +56,10 @@ macOS 截图工具。**纯 Swift 应用**：AppKit 管窗口 / 原生事件与�
   `replacePathWithStrokedPath()` 裁成粗笔刷再画。别退回成拖矩形。
 - **编辑器工具栏用 SwiftUI + SF Symbols。** 图标写在 `Tool.symbol` / `ToolbarSymbol`；缺符号
   回退成文字。文字工具只用中文标签（`Tool.showsTextOnly`），复制 / 保存是「图标 + 中文」，
-  保存按钮用系统 primary 样式（`ToolbarButton.prominent`）。`--selfcheck` 会解析
-  `ToolbarSymbol.all`，拼错直接失败。玻璃风格只在 macOS 26+ 生效——别把 `glassEffect` 写在
-  `#available` 外面，否则部署目标 14.0 会报错。
+  保存是 primary（`ToolbarButton.primary` 的 accent 胶囊）。所有按钮共用同一套自绘样式，
+  不要用 `.borderedProminent` / `.glassProminent` 这类系统按钮样式（会和玻璃图标按钮不成套）。
+  `--selfcheck` 会解析 `ToolbarSymbol.all`，拼错直接失败。玻璃风格只在 macOS 26+ 生效——别把
+  `glassEffect` 写在 `#available` 外面，否则部署目标 14.0 会报错。
 - **CGContext 画文字 `position` 是基线（baseline），不是左上角。** 要按字体度量（ascent /
   lineHeight）换算；当成左上角会让文字标注上移 / size 标签溢出。
 
