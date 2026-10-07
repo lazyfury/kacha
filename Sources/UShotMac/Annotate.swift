@@ -24,6 +24,33 @@ enum Tool: CaseIterable {
         case .mosaic: return "马赛克"
         }
     }
+
+    /// The SF Symbol shown on the toolbar (falls back to `label` if missing).
+    var symbol: String {
+        switch self {
+        case .rectangle: return "rectangle"
+        case .arrow: return "arrow.up.right"
+        case .pen: return "pencil.tip"
+        case .highlighter: return "highlighter"
+        case .text: return "textformat"
+        case .mosaic: return "squareshape.split.3x3"
+        }
+    }
+}
+
+/// SF Symbols used by the editor toolbar.
+enum ToolbarSymbol {
+    static let undo = "arrow.uturn.backward"
+    static let redo = "arrow.uturn.forward"
+    static let copy = "doc.on.doc"
+    static let save = "square.and.arrow.down"
+    static let pin = "pin"
+    static let close = "xmark"
+
+    /// Every symbol the toolbar may show (the self-check resolves them all).
+    static var all: [String] {
+        Tool.allCases.map(\.symbol) + [undo, redo, copy, save, pin, close]
+    }
 }
 
 /// One annotation in image pixel coordinates.

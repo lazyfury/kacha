@@ -20,6 +20,7 @@ enum SelfCheck {
         checkGeometry(check)
         checkColor(check)
         checkAnnotations(check)
+        checkSymbols(check)
 
         print(failures == 0 ? "selfcheck: ok" : "selfcheck: \(failures) failure(s)")
         return failures == 0 ? 0 : 1
@@ -215,6 +216,16 @@ enum SelfCheck {
             return
         }
         check(highlighted != plain, "highlighter changes the exported image")
+    }
+
+    /// Every toolbar SF Symbol must resolve, so a typo cannot silently fall back.
+    private static func checkSymbols(_ check: (Bool, String) -> Void) {
+        for symbol in ToolbarSymbol.all {
+            check(
+                NSImage(systemSymbolName: symbol, accessibilityDescription: nil) != nil,
+                "SF Symbol '\(symbol)' exists"
+            )
+        }
     }
 
     private static func checkColor(_ check: (Bool, String) -> Void) {

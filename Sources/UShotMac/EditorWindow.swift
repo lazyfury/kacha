@@ -85,23 +85,30 @@ final class EditorWindow: NSObject, NSWindowDelegate {
         row.alignment = .centerY
 
         toolButtons = Tool.allCases.enumerated().map { index, tool in
-            let button = NSButton(title: tool.label, target: self, action: #selector(selectTool(_:)))
-            button.bezelStyle = .rounded
+            let button = symbolButton(tool.symbol, title: tool.label, action: #selector(selectTool(_:)))
             button.tag = index
             row.addArrangedSubview(button)
             return button
         }
         row.addArrangedSubview(spacer(width: 12))
-        row.addArrangedSubview(actionButton("撤销", #selector(undo)))
-        row.addArrangedSubview(actionButton("重做", #selector(redo)))
-        row.addArrangedSubview(actionButton("复制", #selector(copyImage)))
-        row.addArrangedSubview(actionButton("保存", #selector(saveImage)))
-        row.addArrangedSubview(actionButton("钉图", #selector(pinImage)))
-        row.addArrangedSubview(actionButton("关闭", #selector(closeEditor)))
+        row.addArrangedSubview(symbolButton(ToolbarSymbol.undo, title: "撤销", action: #selector(undo)))
+        row.addArrangedSubview(symbolButton(ToolbarSymbol.redo, title: "重做", action: #selector(redo)))
+        row.addArrangedSubview(symbolButton(ToolbarSymbol.copy, title: "复制", action: #selector(copyImage)))
+        row.addArrangedSubview(symbolButton(ToolbarSymbol.save, title: "保存", action: #selector(saveImage)))
+        row.addArrangedSubview(symbolButton(ToolbarSymbol.pin, title: "钉图", action: #selector(pinImage)))
+        row.addArrangedSubview(symbolButton(ToolbarSymbol.close, title: "关闭", action: #selector(closeEditor)))
         return row
     }
 
-    private func actionButton(_ title: String, _ action: Selector) -> NSButton {
+    /// A toolbar button that prefers an SF Symbol, with a text fallback.
+    private func symbolButton(_ symbol: String, title: String, action: Selector) -> NSButton {
+        if let image = NSImage(systemSymbolName: symbol, accessibilityDescription: title) {
+            let button = NSButton(image: image, target: self, action: action)
+            button.bezelStyle = .rounded
+            button.imagePosition = .imageOnly
+            button.toolTip = title
+            return button
+        }
         let button = NSButton(title: title, target: self, action: action)
         button.bezelStyle = .rounded
         return button
@@ -125,6 +132,7 @@ final class EditorWindow: NSObject, NSWindowDelegate {
         for (index, button) in toolButtons.enumerated() {
             let active = Tool.allCases[index] == current
             button.bezelColor = active ? .controlAccentColor : nil
+            button.contentTintColor = active ? .white : nil
         }
     }
 

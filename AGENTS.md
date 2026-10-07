@@ -50,6 +50,9 @@ macOS 截图工具。**纯 Swift 应用**：AppKit 管窗口 / 原生事件与�
 - **高亮 / 马赛克是「涂抹」工具，不是形状。** 两者都按 freehand 折线累积点；高亮用半透明
   黄色 + 粗 round-cap 线，马赛克把整图块平均一次（`Mosaic.make`，缓存）后用
   `replacePathWithStrokedPath()` 裁成粗笔刷再画。别退回成拖矩形。
+- **编辑器工具栏用 SF Symbols**（`NSImage(systemSymbolName:)`）。工具图标写在 `Tool.symbol`，
+  动作图标写在 `ToolbarSymbol`；缺符号会回退成文字按钮。`--selfcheck` 会解析
+  `ToolbarSymbol.all`，拼错直接失败而不是静默回退。
 - **CGContext 画文字 `position` 是基线（baseline），不是左上角。** 要按字体度量（ascent /
   lineHeight）换算；当成左上角会让文字标注上移 / size 标签溢出。
 
