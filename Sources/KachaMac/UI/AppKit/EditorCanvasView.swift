@@ -266,7 +266,7 @@ final class EditorCanvasView: NSView, NSTextFieldDelegate {
         needsDisplay = true
     }
 
-    @objc private func commitText() {
+    @objc func commitText() {
         guard let field = textField, let position = editingPosition else { return }
         let text = field.stringValue
         let editing = editingAnnotation
@@ -275,12 +275,10 @@ final class EditorCanvasView: NSView, NSTextFieldDelegate {
         editingAnnotation = nil
         field.removeFromSuperview()
         if let editing {
-            if text.isEmpty {
-                state.annotations.remove(at: editing)
-            } else {
-                state.annotations[editing].text = text
-            }
-            state.redo.removeAll()
+            // The annotation may have been removed while the field was open
+            // (e.g. the toolbar's undo popped it), so the stored index can be
+            // stale — `replaceText` refuses instead of subscripting blindly.
+            state.replaceText(at: editing, with: text)
         } else if !text.isEmpty {
             state.annotations.append(
                 Annotation(

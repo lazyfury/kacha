@@ -139,6 +139,9 @@ private struct EditorToolbar: View {
                 active: false,
                 disabled: !hasImage || state.annotations.isEmpty
             ) {
+                // Commit any in-progress text first: undo while the field is open
+                // would drop the annotation the field is still pointing at.
+                canvas.commitText()
                 state.undo()
                 canvas.needsDisplay = true
             }
@@ -148,6 +151,7 @@ private struct EditorToolbar: View {
                 active: false,
                 disabled: !hasImage || state.redo.isEmpty
             ) {
+                canvas.commitText()
                 state.redoLast()
                 canvas.needsDisplay = true
             }

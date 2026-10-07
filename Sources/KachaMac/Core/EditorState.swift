@@ -38,4 +38,20 @@ final class EditorState: ObservableObject {
             annotations.append(last)
         }
     }
+
+    /// Replace (or, with empty text, delete) the text of the annotation at
+    /// `index`. Returns false when the index is stale — the annotation may have
+    /// been removed by an undo while its field was still open. Pure enough to
+    /// cover in `--selfcheck`.
+    @discardableResult
+    func replaceText(at index: Int, with text: String) -> Bool {
+        guard index < annotations.count else { return false }
+        if text.isEmpty {
+            annotations.remove(at: index)
+        } else {
+            annotations[index].text = text
+        }
+        redo.removeAll()
+        return true
+    }
 }
