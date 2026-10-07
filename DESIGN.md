@@ -2,6 +2,7 @@
 
 > 状态：**已实现并收尾**。工作名 `ushot`。当前实现是纯 Swift（AppKit + Core Graphics +
 > ScreenCaptureKit），没有 Rust / C ABI。旧的 Rust（igui）设计保留在 git 历史里。
+> 系统要求：**macOS 14.0 (Sonoma) 起**。
 
 ---
 
@@ -179,8 +180,8 @@ marker 工具，用 `defaultMarkerStroke`（最小 16px）的粗笔刷。
 - **编辑窗**：画布铺满，工具栏是无标题栏的玻璃浮条浮在顶部（`ZStack(alignment: .top)`），
   当前工具用 accent 胶囊标记。窗口 `contentMinSize = 640×460`；`titlebarAppearsTransparent`
   + `titleVisibility = .hidden` + `titlebarSeparatorStyle = .none` 做成 macOS 26 式的无缝标题栏。
-- **设置窗**：SwiftUI 表单装在半透明玻璃卡片里；热键录制器仍是 AppKit（`NSButton` +
-  本地 `NSEvent` 监听），通过 representable 嵌入。
+- **设置窗**：原生 `Form(.grouped)` 分组表单（系统设置的样子，自动继承 macOS 26 外观）；
+  热键录制器仍是 AppKit（`NSButton` + 本地 `NSEvent` 监听），通过 `NSViewRepresentable` 嵌入。
 
 ### 4.9 钉图
 

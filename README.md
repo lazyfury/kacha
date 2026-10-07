@@ -4,6 +4,8 @@ macOS 截图工具。**纯 Swift**：AppKit 管窗口、Core Graphics 画界面�
 编辑 / 设置窗口的界面用 **SwiftUI**（macOS 26 上是 Liquid Glass，旧系统回退到材质）。
 菜单栏常驻（`.accessory` + `LSUIElement`），无常驻主窗，窗口只在需要时打开。
 
+**系统要求：macOS 14.0 (Sonoma) 起**（ScreenCaptureKit 单帧捕获从 14 才有）。
+
 没有 Rust、没有 C ABI、没有第三方 UI 依赖。`Package.swift` 在仓库根目录，Xcode 直接打开
 本目录即可当作项目构建 / 运行。
 
@@ -50,7 +52,7 @@ Sources/UShotMac/
   Annotate.swift          标注数据模型 + SF Symbols
   PinWindows.swift        钉图悬浮窗
   SettingsWindow.swift    设置窗（NSWindow 宿主）
-  SettingsRootView.swift  设置窗 SwiftUI：玻璃卡片 + 热键录制 representable
+  SettingsRootView.swift  设置窗 SwiftUI：原生分组表单 + 热键录制 representable
   HotkeyRecorderView.swift AppKit 热键录制按钮
   PNG.swift               ImageIO PNG 编码
   SelfCheck.swift         `--selfcheck` 纯逻辑断言

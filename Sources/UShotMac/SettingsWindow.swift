@@ -1,5 +1,5 @@
-// The settings window: a SwiftUI form (Liquid Glass card) hosted in an AppKit
-// window. The hotkey recorder stays AppKit and is embedded.
+// The settings window: a SwiftUI grouped form hosted in an AppKit window. The
+// hotkey recorder stays AppKit and is embedded.
 
 import AppKit
 import SwiftUI
@@ -19,20 +19,16 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
             return
         }
 
-        let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 460, height: 380),
-            styleMask: [.titled, .closable],
-            backing: .buffered,
-            defer: false
-        )
-        window.title = "ushot 设置"
-        window.isReleasedWhenClosed = false
-        window.delegate = self
-
         let root = SettingsRootView(
             onHotkeyChange: { [weak self] in self?.onHotkeyChange?() }
         )
-        window.contentView = NSHostingView(rootView: root)
+        let hosting = NSHostingController(rootView: root)
+        let window = NSWindow(contentViewController: hosting)
+        window.title = "ushot 设置"
+        window.styleMask = [.titled, .closable]
+        window.isReleasedWhenClosed = false
+        window.delegate = self
+        window.setContentSize(hosting.view.fittingSize)
 
         window.center()
         window.makeKeyAndOrderFront(nil)

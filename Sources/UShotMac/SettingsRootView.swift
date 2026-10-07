@@ -1,6 +1,8 @@
-// The settings window's SwiftUI content: the capture / picker hotkeys and
-// launch-at-login. The AppKit hotkey recorder is embedded via
-// `NSViewRepresentable`; the card is Liquid Glass on macOS 26.
+// The settings window's SwiftUI content.
+//
+// A native grouped Form (the modern macOS Settings look, and it inherits the
+// macOS 26 chrome automatically). The hotkey recorder stays AppKit and is
+// embedded with NSViewRepresentable.
 
 import AppKit
 import SwiftUI
@@ -13,60 +15,65 @@ struct SettingsRootView: View {
     @State private var fullScreenHotkey = Preferences.fullScreenHotkey
     @State private var launchAtLogin = LaunchAtLogin.isEnabled
 
-    private let loginAvailable = LaunchAtLogin.isAvailable
+    private var loginAvailable: Bool { LaunchAtLogin.isAvailable }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            row("截图快捷键") {
-                HotkeyRecorder(hotkey: $captureHotkey) { hotkey in
-                    Preferences.captureHotkey = hotkey
-                    onHotkeyChange()
+        Form {
+            Section {
+                hotkeyRow("截图", symbol: "camera.viewfinder", hotkey: $captureHotkey) {
+                    Preferences.captureHotkey = $0
                 }
-            }
-            row("取色器快捷键") {
-                HotkeyRecorder(hotkey: $pickerHotkey) { hotkey in
-                    Preferences.pickerHotkey = hotkey
-                    onHotkeyChange()
+                hotkeyRow(
+                    "全屏截图",
+                    symbol: "arrow.up.left.and.arrow.down.right",
+                    hotkey: $fullScreenHotkey
+                ) {
+                    Preferences.fullScreenHotkey = $0
                 }
-            }
-            row("全屏快捷键") {
-                HotkeyRecorder(hotkey: $fullScreenHotkey) { hotkey in
-                    Preferences.fullScreenHotkey = hotkey
-                    onHotkeyChange()
+                hotkeyRow("取色器", symbol: "eyedropper", hotkey: $pickerHotkey) {
+                    Preferences.pickerHotkey = $0
                 }
+            } header: {
+                Label("快捷键", systemImage: "keyboard")
+            } footer: {
+                Text("点右边的按钮，然后按下新的组合键；按 Esc 取消。")
             }
 
-            Toggle("开机时启动", isOn: loginBinding)
-                .toggleStyle(.checkbox)
-                .disabled(!loginAvailable)
-
-            if !loginAvailable {
-                Text("从 .app 运行时可设置开机启动。")
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
+            Section {
+                Toggle("开机时启动", isOn: loginBinding)
+                    .toggleStyle(.switch)
+                    .disabled(!loginAvailable)
+                if !loginAvailable {
+                    Text("从 .app 运行时可设置开机启动。")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            } header: {
+                Label("通用", systemImage: "gearshape")
             }
 
-            Divider()
-
-            HStack {
-                Spacer()
+            Section {
                 Button("恢复默认快捷键", action: resetHotkeys)
             }
         }
-        .padding(24)
-        .frame(width: 440)
-        .modifier(SettingsGlassBackground())
+        .formStyle(.grouped)
+        .frame(width: 460)
+        .frame(minHeight: 360)
     }
 
-    private func row<Content: View>(
+    private func hotkeyRow(
         _ title: String,
-        @ViewBuilder content: () -> Content
+        symbol: String,
+        hotkey: Binding<Hotkey>,
+        apply: @escaping (Hotkey) -> Void
     ) -> some View {
-        HStack(alignment: .firstTextBaseline) {
-            Text(title)
-                .frame(width: 110, alignment: .trailing)
-            content()
-            Spacer()
+        LabeledContent {
+            HotkeyRecorder(hotkey: hotkey) { value in
+                apply(value)
+                onHotkeyChange()
+            }
+        } label: {
+            Label(title, systemImage: symbol)
         }
     }
 
@@ -124,24 +131,6 @@ private struct HotkeyRecorder: NSViewRepresentable {
         nsView.onChange = { newValue in
             hotkey = newValue
             onChange(newValue)
-        }
-    }
-}
-
-/// Liquid Glass on macOS 26, a material card on macOS 14–15.
-private struct SettingsGlassBackground: ViewModifier {
-    @ViewBuilder
-    func body(content: Content) -> some View {
-        if #available(macOS 26.0, *) {
-            content.glassEffect(
-                .regular,
-                in: RoundedRectangle(cornerRadius: 18, style: .continuous)
-            )
-        } else {
-            content.background(
-                .regularMaterial,
-                in: RoundedRectangle(cornerRadius: 14, style: .continuous)
-            )
         }
     }
 }
