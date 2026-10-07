@@ -20,6 +20,8 @@ enum OverlayMode {
     case capture
     /// Pick a pixel colour and copy its hex.
     case colorPicker
+    /// Region / window / full-display screen recording.
+    case record
 }
 
 @MainActor

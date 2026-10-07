@@ -14,6 +14,7 @@ struct SettingsRootView: View {
     @State private var captureHotkey = Preferences.captureHotkey
     @State private var pickerHotkey = Preferences.pickerHotkey
     @State private var fullScreenHotkey = Preferences.fullScreenHotkey
+    @State private var recordHotkey = Preferences.recordHotkey
     @State private var launchAtLogin = LaunchAtLogin.isEnabled
     @State private var playSound = Preferences.playSound
     @State private var delaySeconds = Preferences.delaySeconds
@@ -35,6 +36,9 @@ struct SettingsRootView: View {
                     }
                     hotkeyRow("全屏截图", hotkey: $fullScreenHotkey) {
                         Preferences.fullScreenHotkey = $0
+                    }
+                    hotkeyRow("录制屏幕", hotkey: $recordHotkey) {
+                        Preferences.recordHotkey = $0
                     }
                     hotkeyRow("取色器", hotkey: $pickerHotkey) {
                         Preferences.pickerHotkey = $0
@@ -214,9 +218,11 @@ struct SettingsRootView: View {
         captureHotkey = .default
         pickerHotkey = .pickerDefault
         fullScreenHotkey = .fullScreenDefault
+        recordHotkey = .recordDefault
         Preferences.captureHotkey = .default
         Preferences.pickerHotkey = .pickerDefault
         Preferences.fullScreenHotkey = .fullScreenDefault
+        Preferences.recordHotkey = .recordDefault
         onHotkeyChange()
     }
 

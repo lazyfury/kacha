@@ -42,7 +42,13 @@ macOS 截图工具。**纯 Swift 应用**：AppKit 管窗口 / 原生事件与�
 - **窗口拾取用 AppKit 命中测试，不要自己用矩形猜。**
   `NSWindow.windowNumber(at:belowWindowWithWindowNumber:)` 是唯一公开的、考虑真实
   z-order / 遮挡 / 透明度的命中测试。以覆盖层的 `windowNumber` 为参考往下测，命中得到的
-  window number 就是 `SCWindow.windowID`。
+  window number 就是 `SCWindow.windowID`。**但录屏不要用这套**——录屏常要录被遮挡 /
+  不在最前的窗口，直接给用户一个窗口列表（`SCShareableContent.windows`）选，
+  `desktopIndependentWindow` 能录被遮挡的窗口。
+- **录屏用 `SCRecordingOutput`（macOS 15+），不是截图那套。** 入口必须
+  `if #available(macOS 15.0, *)` 门控（14.0 上隐藏）。`addRecordingOutput` 必须在
+  `startCapture` 之前，否则开头几帧不进文件；没有暂停 API；控制栏窗口 `sharingType = .none`
+  + filter 排除自身窗口，否则控制栏会被录进去。详见 `RECORDING.md`。
 - **程序化 `NSWindow` / `NSPanel` 必须 `isReleasedWhenClosed = false`。** 默认是 `true`，
   而窗口由 ARC 持有；点红钮 / `performClose` 关闭时 AppKit 释放一次、ARC 再释放一次，
   在 `objc_release` 崩溃（EXC_BAD_ACCESS）。回归：`scripts/run.sh --smoke-editor`
@@ -88,7 +94,7 @@ macOS 截图工具。**纯 Swift 应用**：AppKit 管窗口 / 原生事件与�
 ## 构建与验证
 
 ```bash
-./scripts/dev.sh                     # swift build + selfcheck + 六个 smoke
+./scripts/dev.sh                     # swift build + selfcheck + 七个 smoke
 ```
 
 单独：
@@ -102,6 +108,7 @@ scripts/run.sh --smoke-export
 scripts/run.sh --smoke-ocr
 scripts/run.sh --smoke-viewer
 scripts/run.sh --smoke-barcode
+scripts/run.sh --smoke-record
 scripts/package.sh                   # 组装 dist/kacha.app
 ```
 
@@ -124,6 +131,9 @@ SwiftPM 递归编译子目录，**加文件夹不用改 `Package.swift`**。
 | 延时截图倒计时 | `Sources/KachaMac/UI/AppKit/CountdownHUD.swift` |
 | 编辑窗 / 画布 / 标注 | `Sources/KachaMac/UI/AppKit/EditorWindow.swift`、`EditorCanvasView.swift`、`AnnotationRenderer.swift`、`Core/Annotate.swift`、`EditorState.swift` |
 | 画布几何 / 马赛克 | `Sources/KachaMac/Core/EditorGeometry.swift`、`Mosaic.swift` |
+| 录屏目标 / 几何 / 计时（纯逻辑） | `Sources/KachaMac/Core/Recording.swift` |
+| 录屏后端（SCRecordingOutput，15+） | `Sources/KachaMac/Helper/ScreenRecorder.swift` |
+| 录屏控制栏 | `Sources/KachaMac/UI/AppKit/RecordingBar.swift`、`UI/SwiftUI/RecordingBarView.swift` |
 | 钉图 / 设置 / 热键录制 | `Sources/KachaMac/UI/AppKit/PinWindows.swift`、`UI/SwiftUI/SettingsWindow.swift`、`HotkeyRecorderView.swift` |
 | 截图提示音（系统音效，无资源文件） | `Sources/KachaMac/Helper/ShotSound.swift` |
 | OCR 合并 / sheet（VisionKit transcript） | `Sources/KachaMac/Helper/OCR.swift`、`UI/SwiftUI/OCRResultView.swift` |

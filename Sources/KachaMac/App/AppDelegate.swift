@@ -18,12 +18,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let pins = PinWindows()
     private let settings = SettingsWindow()
     private let countdown = CountdownHUD()
+    private let recordingBar = RecordingBar()
     private lazy var editor = EditorWindow(pins: pins)
     private var menuBar: MenuBar?
     private var hotkeys: Hotkeys?
+    /// The active recorder (macOS 15+); held as `AnyObject` so the property
+    /// itself does not require macOS 15.
+    private var recorder: AnyObject?
     private var captureMenuItem: NSMenuItem?
     private var pickerMenuItem: NSMenuItem?
     private var fullScreenMenuItem: NSMenuItem?
+    private var recordMenuItem: NSMenuItem?
 
     init(options: LaunchOptions) {
         self.options = options
@@ -36,6 +41,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             onCapture: { [weak self] in self?.startCapture() },
             onDelayedCapture: { [weak self] seconds in self?.startDelayedCapture(seconds: seconds) },
             onFullScreen: { [weak self] in self?.startFullScreenCapture() },
+            onRecord: { [weak self] in self?.startRecording() },
             onPicker: { [weak self] in self?.startColorPicker() },
             onViewer: { [weak self] in self?.openViewer() },
             onSettings: { [weak self] in self?.settings.show() },
@@ -67,6 +73,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         overlays.onPick = { [weak self] session, window in
             self?.captureWindow(window, session: session)
         }
+        overlays.onRecord = { [weak self] _, target in
+            self?.beginRecording(target)
+        }
 
         if options.smokeSettings {
             runSettingsSmoke()
@@ -86,6 +95,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if options.smokeBarcode {
             runBarcodeSmoke()
         }
+        if options.smokeRecord {
+            runRecordSmoke()
+        }
     }
 
     /// A menu-bar app keeps running after its last window closes.
@@ -95,6 +107,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         countdown.cancel()
+        recordingBar.close()
         overlays.close()
         editor.close()
         pins.closeAll()
@@ -110,6 +123,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             },
             Hotkeys.Binding(id: 3, hotkey: Preferences.fullScreenHotkey) { [weak self] in
                 self?.startFullScreenCapture()
+            },
+            Hotkeys.Binding(id: 4, hotkey: Preferences.recordHotkey) { [weak self] in
+                self?.startRecording()
             },
         ])
     }
@@ -133,6 +149,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         fullScreen.target = self
         appMenu.addItem(fullScreen)
         self.fullScreenMenuItem = fullScreen
+
+        let record = NSMenuItem(
+            title: "录制屏幕",
+            action: #selector(startRecording),
+            keyEquivalent: ""
+        )
+        record.target = self
+        appMenu.addItem(record)
+        self.recordMenuItem = record
 
         let picker = NSMenuItem(title: "取色器", action: #selector(startColorPicker), keyEquivalent: "")
         picker.target = self
@@ -163,6 +188,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         Preferences.captureHotkey.apply(to: captureMenuItem)
         Preferences.pickerHotkey.apply(to: pickerMenuItem)
         Preferences.fullScreenHotkey.apply(to: fullScreenMenuItem)
+        Preferences.recordHotkey.apply(to: recordMenuItem)
     }
 
     @objc private func openSettings() {
@@ -230,6 +256,72 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             session.composed = Compose.composed(from: display.image)
             ShotSound.playIfEnabled()
             self.editor.show(session: session)
+        }
+    }
+
+    /// Start screen recording: freeze, pick a region / window / display, then
+    /// record. Requires macOS 15 (`SCRecordingOutput`).
+    @objc private func startRecording() {
+        guard #available(macOS 15.0, *) else {
+            presentAlert(
+                "需要 macOS 15",
+                informative: "录屏使用系统的 SCRecordingOutput，需要 macOS 15 或更新版本。"
+            )
+            return
+        }
+        startOverlay(mode: .record)
+    }
+
+    /// Begin recording `target`, showing the control bar until it stops.
+    private func beginRecording(_ target: RecordingTarget) {
+        guard #available(macOS 15.0, *) else { return }
+        let recorder = ScreenRecorder()
+        self.recorder = recorder
+        let destination = Export.recordingDestination()
+
+        recorder.onFinish = { [weak self] result in
+            self?.recordingBar.onStop = nil
+            self?.recordingBar.onCancel = nil
+            self?.recordingBar.close()
+            self?.recorder = nil
+            self?.finishRecording(result, temporary: destination.temporary)
+        }
+
+        Task { @MainActor in
+            do {
+                try await recorder.start(target: target, to: destination.url)
+                self.recordingBar.onStop = { recorder.stop() }
+                self.recordingBar.onCancel = { recorder.cancel() }
+                self.recordingBar.show(elapsed: { recorder.elapsed })
+            } catch {
+                self.recorder = nil
+                self.presentCaptureError(error)
+            }
+        }
+    }
+
+    /// Report a finished recording: save a temp file, or point at the written one.
+    private func finishRecording(_ result: Result<URL, Error>, temporary: Bool) {
+        switch result {
+        case .success(let url):
+            let final = temporary ? Export.saveMovie(at: url) : url
+            guard let final else { return }
+            presentRecordingSaved(final)
+        case .failure(let error):
+            if case RecordingError.cancelled = error { return }
+            self.presentCaptureError(error)
+        }
+    }
+
+    private func presentRecordingSaved(_ url: URL) {
+        let response = presentAlert(
+            "录制完成",
+            informative: url.path,
+            style: .informational,
+            buttons: ["在 Finder 显示", "好"]
+        )
+        if response == .alertFirstButtonReturn {
+            NSWorkspace.shared.activateFileViewerSelecting([url])
         }
     }
 
@@ -476,6 +568,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
                     exit(ok ? 0 : 1)
                 }
+            }
+        }
+    }
+
+    /// Debug (`--smoke-record`): open and close the recording control bar.
+    private func runRecordSmoke() {
+        recordingBar.show(elapsed: { 5 })
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
+            self?.recordingBar.close()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                FileHandle.standardError.write(Data("kacha smoke-record: ok\n".utf8))
+                exit(0)
             }
         }
     }

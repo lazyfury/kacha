@@ -170,9 +170,16 @@ final class CaptureSelectionView: OverlaySurfaceView {
     /// The bottom-centre instruction pill. The text reflects the current step so
     /// the two-level back (clear selection, then cancel) is explicit.
     private func drawHint(_ ctx: CGContext, viewport: CGRect, hasSelection: Bool) {
-        let text = hasSelection
-            ? "Enter 完成 · 点空白 / 右键 / Esc 取消选区"
-            : "拖拽框选 · 点击窗口截窗口 · 点击空白处截整屏 · Esc 退出"
+        let text: String
+        if session.mode == .record {
+            text = hasSelection
+                ? "Enter 开始录制 · 点空白 / 右键 / Esc 取消选区"
+                : "拖拽框选录制区域 · 点击窗口录窗口 · 点击空白录整屏 · Esc 退出"
+        } else {
+            text = hasSelection
+                ? "Enter 完成 · 点空白 / 右键 / Esc 取消选区"
+                : "拖拽框选 · 点击窗口截窗口 · 点击空白处截整屏 · Esc 退出"
+        }
         let attributed = NSAttributedString(
             string: text,
             attributes: [
@@ -223,11 +230,21 @@ final class CaptureSelectionView: OverlaySurfaceView {
         let primary: Bool
     }
 
-    private static let quickButtons: [QuickButton] = [
+    private static let captureButtons: [QuickButton] = [
         QuickButton(title: "取消", action: .cancel, primary: false),
         QuickButton(title: "直接保存", action: .save, primary: false),
         QuickButton(title: "去编辑", action: .confirm, primary: true),
     ]
+
+    private static let recordButtons: [QuickButton] = [
+        QuickButton(title: "取消", action: .cancel, primary: false),
+        QuickButton(title: "开始录制", action: .confirm, primary: true),
+    ]
+
+    /// The action bar's buttons for the current mode.
+    private var quickButtons: [QuickButton] {
+        session.mode == .record ? Self.recordButtons : Self.captureButtons
+    }
 
     /// The action bar's rect and each button's frame, in local coordinates.
     /// Anchored just below the selection (or above / at the bottom edge when
@@ -245,12 +262,12 @@ final class CaptureSelectionView: OverlaySurfaceView {
         let margin: CGFloat = 8
         let font = NSFont.systemFont(ofSize: 13, weight: .medium)
 
-        let widths = Self.quickButtons.map { button -> CGFloat in
+        let widths = quickButtons.map { button -> CGFloat in
             let text = NSAttributedString(string: button.title, attributes: [.font: font])
             return max(text.size().width + hPadding * 2, 54)
         }
         let contentWidth = widths.reduce(0, +)
-            + spacing * CGFloat(Self.quickButtons.count - 1)
+            + spacing * CGFloat(quickButtons.count - 1)
         let barWidth = contentWidth + padding * 2
         let barHeight = buttonHeight + padding * 2
 
@@ -267,7 +284,7 @@ final class CaptureSelectionView: OverlaySurfaceView {
         let bar = CGRect(x: x, y: y, width: barWidth, height: barHeight)
         var buttons: [(QuickAction, CGRect)] = []
         var cursor = bar.minX + padding
-        for (index, button) in Self.quickButtons.enumerated() {
+        for (index, button) in quickButtons.enumerated() {
             let frame = CGRect(
                 x: cursor,
                 y: bar.minY + padding,
@@ -290,7 +307,7 @@ final class CaptureSelectionView: OverlaySurfaceView {
 
         for (index, entry) in layout.buttons.enumerated() {
             let (_, frame) = entry
-            let button = Self.quickButtons[index]
+            let button = quickButtons[index]
             ctx.setFillColor(
                 button.primary ? Self.accent : NSColor(calibratedWhite: 1, alpha: 0.16).cgColor
             )
@@ -357,7 +374,7 @@ final class CaptureSelectionView: OverlaySurfaceView {
                 let layout = actionLayout(selection: localSelection, viewport: bounds)
             {
                 for (index, entry) in layout.buttons.enumerated() where entry.1.contains(local) {
-                    perform(Self.quickButtons[index].action)
+                    perform(quickButtons[index].action)
                     return
                 }
             }
@@ -533,6 +550,7 @@ final class OverlayController {
     var onCancel: ((CaptureSession) -> Void)?
     var onSave: ((CaptureSession) -> Void)?
     var onPick: ((CaptureSession, SCWindow) -> Void)?
+    var onRecord: ((CaptureSession, RecordingTarget) -> Void)?
 
     /// Open one panel per display, over `session`'s frozen frames.
     func show(session: CaptureSession, windows: [SCWindow]) {
@@ -632,23 +650,58 @@ final class OverlayController {
     func pick(_ window: SCWindow) {
         guard let session else { return }
         hoveredWindow = window
-        dismiss()
-        onPick?(session, window)
+        if session.mode == .record {
+            // Recording keeps the session only for the target; drop the frozen
+            // frames so they are not held for the whole recording.
+            close()
+            onRecord?(session, .window(window))
+        } else {
+            dismiss()
+            onPick?(session, window)
+        }
     }
 
-    /// Capture the whole display from its frozen frame.
+    /// Capture the whole display from its frozen frame (or record it).
     func captureFullScreen(_ display: CapturedDisplay) {
         guard let session else { return }
-        session.composed = Compose.composed(from: display.image)
-        dismiss()
-        onConfirm?(session)
+        if session.mode == .record {
+            close()
+            onRecord?(session, .display(display))
+        } else {
+            session.composed = Compose.composed(from: display.image)
+            dismiss()
+            onConfirm?(session)
+        }
     }
 
     func confirm() {
         guard let session else { return }
+        if session.mode == .record {
+            guard let selection = session.selection,
+                let display = anchorDisplay(for: selection, in: session)
+            else {
+                return
+            }
+            close()
+            onRecord?(session, .region(display, selection))
+            return
+        }
         session.confirm()
         dismiss()
         onConfirm?(session)
+    }
+
+    /// The display that anchors `selection`: the one under its top-left corner,
+    /// or the first it intersects.
+    private func anchorDisplay(
+        for selection: CGRect,
+        in session: CaptureSession
+    ) -> CapturedDisplay? {
+        let anchor = CGPoint(x: selection.minX, y: selection.minY)
+        return session.displayList.first { $0.globalRect.contains(anchor) }
+            ?? session.displayList.first {
+                Selection.intersection(selection, $0.globalRect) != nil
+            }
     }
 
     /// Confirm the selection and save it without opening the editor.

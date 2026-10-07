@@ -24,6 +24,8 @@ struct LaunchOptions {
     let smokeViewer: Bool
     /// Debug: open the editor on a generated QR and decode it, then quit.
     let smokeBarcode: Bool
+    /// Debug: open and close the recording control bar, then quit.
+    let smokeRecord: Bool
 
     static func parse(_ arguments: [String]) -> LaunchOptions {
         var selfCheck = false
@@ -33,6 +35,7 @@ struct LaunchOptions {
         var smokeOCR = false
         var smokeViewer = false
         var smokeBarcode = false
+        var smokeRecord = false
         var index = 1
         while index < arguments.count {
             let argument = arguments[index]
@@ -58,9 +61,12 @@ struct LaunchOptions {
             case "--smoke-barcode":
                 smokeBarcode = true
                 index += 1
+            case "--smoke-record":
+                smokeRecord = true
+                index += 1
             case "-h", "--help":
                 let usage =
-                    "用法：kacha-mac [--selfcheck] [--smoke-settings] [--smoke-editor] [--smoke-export] [--smoke-ocr] [--smoke-viewer] [--smoke-barcode]\n"
+                    "用法：kacha-mac [--selfcheck] [--smoke-settings] [--smoke-editor] [--smoke-export] [--smoke-ocr] [--smoke-viewer] [--smoke-barcode] [--smoke-record]\n"
                 FileHandle.standardError.write(Data(usage.utf8))
                 exit(0)
             default:
@@ -74,7 +80,8 @@ struct LaunchOptions {
             smokeExport: smokeExport,
             smokeOCR: smokeOCR,
             smokeViewer: smokeViewer,
-            smokeBarcode: smokeBarcode
+            smokeBarcode: smokeBarcode,
+            smokeRecord: smokeRecord
         )
     }
 }

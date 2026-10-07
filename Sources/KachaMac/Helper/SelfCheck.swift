@@ -28,6 +28,7 @@ enum SelfCheck {
         checkExport(check)
         checkOCR(check)
         checkBarcode(check)
+        checkRecording(check)
         checkSound(check)
 
         print(failures == 0 ? "selfcheck: ok" : "selfcheck: \(failures) failure(s)")
@@ -381,6 +382,40 @@ enum SelfCheck {
         guard let output = filter.outputImage else { return nil }
         let scaled = output.transformed(by: CGAffineTransform(scaleX: 10, y: 10))
         return CIContext().createCGImage(scaled, from: scaled.extent)
+    }
+
+    /// Recording geometry and the control-bar timer format.
+    private static func checkRecording(_ check: (Bool, String) -> Void) {
+        check(formatDuration(0) == "00:00", "duration formats zero")
+        check(formatDuration(65) == "01:05", "duration formats minutes")
+        check(formatDuration(3661) == "1:01:01", "duration formats hours")
+
+        guard
+            let display = display(
+                origin: CGPoint(x: 100, y: 0),
+                logical: CGSize(width: 200, height: 100),
+                scale: 2,
+                color: CGColor(srgbRed: 0, green: 0, blue: 0, alpha: 1)
+            )
+        else {
+            check(false, "could not build the recording display")
+            return
+        }
+        let region = recordingRegion(
+            selection: CGRect(x: 120, y: 10, width: 30, height: 20),
+            display: display
+        )
+        check(
+            region.sourceRect == CGRect(x: 20, y: 10, width: 30, height: 20),
+            "region maps to display-local points"
+        )
+        check(region.width == 60 && region.height == 40, "region outputs native pixels")
+        let size = recordingDisplaySize(display: display)
+        check(size.width == 400 && size.height == 200, "display outputs native pixels")
+        check(
+            Export.timestampedName(extension: "mp4").hasSuffix(".mp4"),
+            "movie name uses the mp4 extension"
+        )
     }
 
     /// The fallback must always resolve; the exact system capture sound is not a

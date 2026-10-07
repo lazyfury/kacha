@@ -16,6 +16,8 @@ struct Hotkey: Equatable {
     static let pickerDefault = Hotkey(keyCode: 8, modifiers: [.command, .shift], keyLabel: "C")
     /// ⌘⇧F, the default full-screen-capture shortcut.
     static let fullScreenDefault = Hotkey(keyCode: 3, modifiers: [.command, .shift], keyLabel: "F")
+    /// ⌘⇧R, the default screen-recording shortcut.
+    static let recordDefault = Hotkey(keyCode: 15, modifiers: [.command, .shift], keyLabel: "R")
 
     /// The shortcut modifiers only (not caps lock / fn / numeric pad).
     static let relevantModifiers: NSEvent.ModifierFlags = [.command, .shift, .option, .control]
@@ -83,6 +85,12 @@ enum Preferences {
     static var fullScreenHotkey: Hotkey {
         get { hotkey("fullscreen", fallback: .fullScreenDefault) }
         set { setHotkey("fullscreen", newValue) }
+    }
+
+    /// The screen-recording shortcut.
+    static var recordHotkey: Hotkey {
+        get { hotkey("record", fallback: .recordDefault) }
+        set { setHotkey("record", newValue) }
     }
 
     /// Play the system shutter sound when a capture is committed. Defaults to on

@@ -8,6 +8,7 @@ final class MenuBar: NSObject, NSMenuDelegate {
     private let onCapture: () -> Void
     private let onDelayedCapture: (Int) -> Void
     private let onFullScreen: () -> Void
+    private let onRecord: () -> Void
     private let onPicker: () -> Void
     private let onViewer: () -> Void
     private let onSettings: () -> Void
@@ -15,6 +16,7 @@ final class MenuBar: NSObject, NSMenuDelegate {
     private let onQuit: () -> Void
     private var captureItem: NSMenuItem?
     private var fullScreenItem: NSMenuItem?
+    private var recordItem: NSMenuItem?
     private var pickerItem: NSMenuItem?
     private var delayItems: [NSMenuItem] = []
 
@@ -22,6 +24,7 @@ final class MenuBar: NSObject, NSMenuDelegate {
         onCapture: @escaping () -> Void,
         onDelayedCapture: @escaping (Int) -> Void,
         onFullScreen: @escaping () -> Void,
+        onRecord: @escaping () -> Void,
         onPicker: @escaping () -> Void,
         onViewer: @escaping () -> Void,
         onSettings: @escaping () -> Void,
@@ -31,6 +34,7 @@ final class MenuBar: NSObject, NSMenuDelegate {
         self.onCapture = onCapture
         self.onDelayedCapture = onDelayedCapture
         self.onFullScreen = onFullScreen
+        self.onRecord = onRecord
         self.onPicker = onPicker
         self.onViewer = onViewer
         self.onSettings = onSettings
@@ -87,6 +91,15 @@ final class MenuBar: NSObject, NSMenuDelegate {
         menu.addItem(fullScreen)
         self.fullScreenItem = fullScreen
 
+        let record = NSMenuItem(
+            title: "录制屏幕",
+            action: #selector(recordClicked),
+            keyEquivalent: ""
+        )
+        record.target = self
+        menu.addItem(record)
+        self.recordItem = record
+
         let picker = NSMenuItem(title: "取色器", action: #selector(pickerClicked), keyEquivalent: "")
         picker.target = self
         menu.addItem(picker)
@@ -129,6 +142,7 @@ final class MenuBar: NSObject, NSMenuDelegate {
     func updateShortcuts() {
         Preferences.captureHotkey.apply(to: captureItem)
         Preferences.fullScreenHotkey.apply(to: fullScreenItem)
+        Preferences.recordHotkey.apply(to: recordItem)
         Preferences.pickerHotkey.apply(to: pickerItem)
         for item in delayItems {
             item.state = item.tag == Preferences.delaySeconds ? .on : .off
@@ -137,6 +151,7 @@ final class MenuBar: NSObject, NSMenuDelegate {
 
     @objc private func captureClicked() { onCapture() }
     @objc private func delayClicked(_ sender: NSMenuItem) { onDelayedCapture(sender.tag) }
+    @objc private func recordClicked() { onRecord() }
     @objc private func fullScreenClicked() { onFullScreen() }
     @objc private func pickerClicked() { onPicker() }
     @objc private func viewerClicked() { onViewer() }

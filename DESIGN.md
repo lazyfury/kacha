@@ -19,11 +19,13 @@
 - **取色器**：在冻帧上取样，放大镜 + hex，点击复制。
 - **看图模式**：菜单栏「看图」开一个空编辑窗（工具禁用），拖入图片后进入和截图一样的
   标注 / 导出 / OCR 流程。
+- **录屏**（默认 `⌘⇧R`，macOS 15+）：区域 / 窗口 / 整屏录成 mp4（见 §4.13）。
 - **零第三方依赖**：界面用 AppKit / Core Graphics 画，抓屏用系统 ScreenCaptureKit。
 
-### 1.1 非目标（MVP 不做）
+### 1.1 非目标
 
-- 录屏 / GIF、滚屏长图、云上传与分享链接。
+- 滚屏长图、GIF 导出、云上传与分享链接。
+- 录屏的暂停 / 音频 / 自动运镜（分期见 `RECORDING.md`）。
 - 多用户 / 账户 / 同步。
 - Windows / Linux 壳。
 - 用截图做**测试**验证（见 §7）。
@@ -86,6 +88,7 @@ kacha/
 │   │   ├── Annotate.swift        # 标注数据模型 + SF Symbols
 │   │   ├── EditorState.swift     # 编辑状态（工具 / 颜色 / 标注 / 撤销栈）
 │   │   ├── EditorGeometry.swift  # 画布几何与尺寸启发（纯函数）
+│   │   ├── Recording.swift       # 录制目标 / 几何 / 时长格式化（纯逻辑）
 │   │   └── Mosaic.swift          # 块平均马赛克源 + 像素取样
 │   ├── UI/
 │   │   ├── AppKit/               # NSWindow / NSView + Core Graphics 绘制
@@ -98,10 +101,12 @@ kacha/
 │   │   │   ├── ColorPicker.swift       # 放大镜 + 像素取样 + hex
 │   │   │   └── WindowChrome.swift      # 窗口 chrome / isReleasedWhenClosed 统一设置
 │   │   │   └── CountdownHUD.swift      # 延时截图的居中倒计时面板
+│   │   │   └── RecordingBar.swift      # 录屏悬浮控制栏（NSPanel 宿主）
 │   │   └── SwiftUI/              # NSHostingView 承载的 chrome
 │   │       ├── EditorRootView.swift     # 编辑窗：玻璃工具栏 + 画布 representable
 │   │       ├── OCRResultView.swift      # OCR 识别结果 sheet（可编辑 / 复制）
 │   │       ├── BarcodeResultView.swift  # 二维码 / 条码结果 sheet（逐条复制）
+│   │       ├── RecordingBarView.swift   # 录屏控制栏 SwiftUI（计时 / 停止 / 取消）
 │   │       ├── SettingsWindow.swift     # 设置窗（NSWindow 宿主）
 │   │       ├── SettingsRootView.swift   # 设置窗：系统设置风顶栏 / 卡片 / 底栏
 │   │       └── HotkeyRecorderView.swift # 热键录制按钮 + 本地 NSEvent 监听
@@ -114,6 +119,7 @@ kacha/
 │       ├── Export.swift          # 剪贴板 / 保存面板（编辑器与钉图共用）
 │       ├── OCR.swift             # VisionKit 文本分析 + 合并换行
 │       ├── Barcode.swift         # Vision 二维码 / 条码解码
+│       ├── ScreenRecorder.swift  # SCStream + SCRecordingOutput 录屏后端（15+）
 │       ├── ShotSound.swift       # 系统截图提示音
 │       └── SelfCheck.swift       # --selfcheck 纯逻辑断言
 ├── packaging/Info.plist          # LSUIElement=true、LSMinimumSystemVersion=14.0
@@ -270,6 +276,27 @@ Core Image 的 `CIQRCodeGenerator` 生成一个 QR 再解码断言（`--smoke-ba
 保证倒计时本身不会进冻帧（面板也开了 `sharingType = .none` 双保险）。面板是
 `.nonactivatingPanel + ignoresMouseEvents`，不抢焦点、不挡交互，用户可继续摆屏。
 
+### 4.13 录屏
+
+录屏走**方案 A**：macOS 15 起的 `SCRecordingOutput` 直接把 SCStream 写成文件，不用自己
+接 `AVAssetWriter`。入口是菜单「录制屏幕」+ 热键（默认 `⌘⇧R`）；在 14.0 上 `#available`
+门控，隐藏入口。流程复用截图的冻结 + 覆盖层：`OverlayMode.record` 下确认选区 / 点窗口 /
+点桌面后，不再裁剪静态图，而是交给 `OverlayController.onRecord(session, target)`，
+`RecordingTarget` 是 `.region / .window / .display` 三种。
+
+- **窗口录制不依赖顶层**：用 `SCContentFilter(desktopIndependentWindow:)` 录窗口自身内容，
+  被遮挡 / 不在最前也能录（和截图单窗口同一思路）。
+- **几何**：区域用 `sourceRect`（显示器本地**点**）+ 原生像素输出尺寸（`recordingRegion`
+  纯函数，向下取偶，H.264 要求）；整屏同理。
+- **排除自身**：filter 排除本 app 窗口，控制栏 `sharingType = .none`，保证控制栏不进画面。
+- **控制栏**：`RecordingBar`（`.nonactivatingPanel` + `sharingType = .none`，`isMovableByWindowBackground`）
+  里放 SwiftUI，红点 + 计时（`formatDuration`）+ 停止 / 取消；计时轮询
+  `SCRecordingOutput.recordedDuration`。
+- **保存**：有保存目录就直写（`Export.recordingDestination` 去重），否则先写临时文件，
+  停止后用 `Export.saveMovie` 弹保存面板；结果弹窗给「在 Finder 显示」。
+- **测试**：`--selfcheck` 覆盖几何 / 时长 / 文件名；`--smoke-record` 开 / 关控制栏
+  （不真录屏、不需要权限）。
+
 ---
 
 ## 5. 数据流（时序）
@@ -306,9 +333,9 @@ Core Image 的 `CIQRCodeGenerator` 生成一个 QR 再解码断言（`--smoke-ba
 - `--selfcheck`：纯逻辑断言，无窗口、无屏幕录制权限、无 XCTest。覆盖坐标 / 裁剪 / PNG /
   标注栅格化等纯函数。
 - `--smoke-settings` / `--smoke-editor` / `--smoke-export` / `--smoke-ocr` / `--smoke-viewer` /
-  `--smoke-barcode`：真实开 / 关窗口路径、Vision 文字与条码识别路径与看图空窗拖放路径，回归
-  `isReleasedWhenClosed` 崩溃与编辑窗生命周期。
-- `scripts/dev.sh` 串起 build + selfcheck + 六个 smoke。
+  `--smoke-barcode` / `--smoke-record`：真实开 / 关窗口路径、Vision 文字与条码识别路径与
+  看图空窗拖放路径，回归 `isReleasedWhenClosed` 崩溃与编辑窗生命周期。
+- `scripts/dev.sh` 串起 build + selfcheck + 七个 smoke。
 
 ---
 
@@ -319,4 +346,6 @@ Core Image 的 `CIQRCodeGenerator` 生成一个 QR 再解码断言（`--smoke-ba
 - 窗口拾取不做 app 级分组 / 子窗口选择。
 - 裁剪 / 滚屏长图未做。
 - 多显示器非均匀缩放下的跨屏拼接以最大 scale 兜底，尚未逐屏混合。
+- 录屏：Phase 1 只有视频（无暂停 / 系统声 / 麦克风），且仅 macOS 15+；区域不能跨屏；
+  自动运镜 / 焦点缩放未做（见 `RECORDING.md`）。
 - Liquid Glass 只在 macOS 26+ 生效，旧系统是材质回退；部署目标仍是 14.0。

@@ -31,6 +31,7 @@ let package = Package(
                     "-Xlinker", "26.0",
                 ]),
                 .linkedFramework("AppKit"),
+                .linkedFramework("AVFoundation"),
                 .linkedFramework("Metal"),
                 .linkedFramework("MetalKit"),
                 .linkedFramework("QuartzCore"),

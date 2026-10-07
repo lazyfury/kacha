@@ -21,6 +21,9 @@ macOS 截图工具。**纯 Swift**：AppKit 管窗口、Core Graphics 画界面�
   菜单、悬停态等）。
 - **全屏截图**（默认 `⌘⇧F`）：直接抓鼠标所在显示器进编辑窗，不走覆盖层。
 - **看图**：菜单栏开一个空编辑窗（按钮禁用），把图片拖进来即进入和截图一样的编辑流程。
+- **录制屏幕**（默认 `⌘⇧R`，macOS 15+）：区域 / 窗口 / 整屏录成 H.264 mp4。复用冻结 +
+  覆盖层选区；确认后弹悬浮控制栏（计时 / 停止 / 取消）。窗口录制**不依赖顶层**，被遮挡的
+  窗口也能录。有保存目录就直写，否则停止后弹保存面板。
 - **取色器**（默认 `⌘⇧C`）：在冻帧上取样，放大镜 + hex 读数；点击或 `Enter` 复制 hex，
   `Esc` 取消。
 - **编辑窗**：矩形（可填充）/ 椭圆（可填充）/ 直线 / 箭头 / 画笔 / 文字（支持 IME，
@@ -51,6 +54,7 @@ Sources/KachaMac/
     EditorState.swift     编辑状态（工具 / 颜色 / 标注 / 撤销栈）
     EditorGeometry.swift  画布几何与尺寸启发（纯函数）
     Mosaic.swift          块平均马赛克源 + 像素取样
+    Recording.swift       录制目标 / 几何 / 时长格式化（纯逻辑）
   UI/AppKit/              NSWindow / NSView + Core Graphics 绘制
     OverlayWindow.swift   每屏一个无边框 NSPanel：冻帧背景 + 选区 / 窗口高亮 / 取色
     EditorWindow.swift    编辑窗（NSWindow 宿主）
@@ -61,10 +65,12 @@ Sources/KachaMac/
     ColorPicker.swift     取色器放大镜 + hex
     WindowChrome.swift    窗口 chrome / isReleasedWhenClosed 统一设置
     CountdownHUD.swift    延时截图的居中倒计时面板
+    RecordingBar.swift    录屏悬浮控制栏（NSPanel 宿主）
   UI/SwiftUI/             NSHostingView 承载的 chrome
     EditorRootView.swift  编辑窗 SwiftUI：玻璃工具栏 + 画布 representable
     OCRResultView.swift   OCR 识别结果 sheet（可编辑 / 复制）
     BarcodeResultView.swift 二维码 / 条码结果 sheet（逐条复制）
+    RecordingBarView.swift 录屏控制栏 SwiftUI（计时 / 停止 / 取消）
     SettingsWindow.swift  设置窗（NSWindow 宿主）
     SettingsRootView.swift 设置窗 SwiftUI：系统设置风顶栏 / 分组卡片 / 底部动作栏
     HotkeyRecorderView.swift SwiftUI 热键录制按钮 + 本地 NSEvent 监听
@@ -77,6 +83,7 @@ Sources/KachaMac/
     Export.swift          剪贴板 / 保存面板（编辑器与钉图共用）
     OCR.swift             VisionKit 文本分析 / 合并换行
     Barcode.swift         Vision 二维码 / 条码解码
+    ScreenRecorder.swift  SCStream + SCRecordingOutput 录屏后端（macOS 15+）
     ShotSound.swift       系统截图提示音
     SelfCheck.swift       `--selfcheck` 纯逻辑断言
 
@@ -95,6 +102,7 @@ scripts/run.sh --smoke-editor    # 开/关编辑窗，走 AppKit 真实关闭路
 scripts/run.sh --smoke-export    # 注入合成图 → 编辑 → 复制到剪贴板
 scripts/run.sh --smoke-viewer    # 空看图窗 → 载入图片 → 导出
 scripts/run.sh --smoke-barcode   # 生成 QR → 编辑窗解码 → 断言 payload
+scripts/run.sh --smoke-record    # 开 / 关录屏控制栏（不真录屏）
 scripts/package.sh [--open]      # 组装并 ad-hoc 签名 dist/kacha.app（含图标）
 
 ./scripts/dev.sh                 # build + selfcheck + settings/editor/export/ocr/viewer/barcode smoke
@@ -108,7 +116,8 @@ scripts/package.sh [--open]      # 组装并 ad-hoc 签名 dist/kacha.app（含�
 
 - `--selfcheck`：纯逻辑断言（坐标、裁剪、PNG、标注栅格化），无窗口、无屏幕录制权限、无 XCTest。
 - `--smoke-settings` / `--smoke-editor` / `--smoke-export` / `--smoke-ocr` / `--smoke-viewer` /
-  `--smoke-barcode`：真实开 / 关窗口路径、Vision 文字与条码识别路径与看图空窗拖放路径。
+  `--smoke-barcode` / `--smoke-record`：真实开 / 关窗口路径、Vision 文字与条码识别路径、
+  录屏控制栏与看图空窗拖放路径。
 - **不写截图 / 录屏测试**：渲染与捕获用自检 + 纯函数单测覆盖。
 
 ## 已知缺口
@@ -118,3 +127,4 @@ scripts/package.sh [--open]      # 组装并 ad-hoc 签名 dist/kacha.app（含�
 - 文字提交后不能二次编辑（可撤销）。
 - 窗口拾取不做 app 级分组 / 子窗口选择。
 - 裁剪 / 滚屏长图未做。
+- 录屏只到 Phase 1：无暂停 / 系统声 / 麦克风，且仅 macOS 15+；区域不能跨屏；自动运镜未做。

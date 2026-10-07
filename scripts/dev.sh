@@ -24,4 +24,6 @@ echo "== smoke: viewer =="
 .build/debug/kacha-mac --smoke-viewer
 echo "== smoke: barcode =="
 .build/debug/kacha-mac --smoke-barcode
+echo "== smoke: record =="
+.build/debug/kacha-mac --smoke-record
 echo "OK"
