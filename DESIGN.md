@@ -180,9 +180,10 @@ marker 工具，用 `defaultMarkerStroke`（最小 16px）的粗笔刷。
   `GlassEffectContainer`）。代码一律 `if #available(macOS 26.0, *)`，旧系统回退到 `.bar` /
   `.regularMaterial`，**部署目标保持 14.0**。
 - **编辑窗**：`.fullSizeContentView`，画布铺满整窗（含标题栏区域），工具栏是无标题栏的玻璃
-  浮条浮在左上（`ZStack(alignment: .topLeading)`，左边留 84pt 避开红绿灯），当前工具用 accent
-  胶囊标记。窗口 `contentMinSize = 780×460`；`titlebarAppearsTransparent` +
-  `titleVisibility = .hidden` + `titlebarSeparatorStyle = .none`。
+  浮条**居中**浮在顶部（`ZStack(alignment: .top)`）；因为标题栏没得拖了，浮条最左边加了一个
+  `WindowDragArea` 拖拽把手（调 `performDrag`）。当前工具用 accent 胶囊标记。窗口
+  `contentMinSize = 840×460`；`titlebarAppearsTransparent` + `titleVisibility = .hidden` +
+  `titlebarSeparatorStyle = .none`。
 - **设置窗**：原生 `Form(.grouped)` 分组表单（系统设置的样子，自动继承 macOS 26 外观）；
   热键录制器仍是 AppKit（`NSButton` + 本地 `NSEvent` 监听），通过 `NSViewRepresentable` 嵌入。
 

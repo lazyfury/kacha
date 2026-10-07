@@ -17,7 +17,7 @@ struct EditorRootView: View {
     let onClose: () -> Void
 
     var body: some View {
-        ZStack(alignment: .topLeading) {
+        ZStack(alignment: .top) {
             CanvasRepresentable(canvas: canvas)
             EditorToolbar(
                 state: state,
@@ -28,9 +28,8 @@ struct EditorRootView: View {
                 onClose: onClose
             )
             .padding(.top, 10)
-            .padding(.leading, 84)
         }
-        .frame(minWidth: 780, minHeight: 460)
+        .frame(minWidth: 840, minHeight: 460)
         .ignoresSafeArea()
     }
 }
@@ -57,6 +56,8 @@ private struct EditorToolbar: View {
 
     var body: some View {
         HStack(spacing: 4) {
+            WindowDragGrip()
+
             ForEach(Tool.allCases, id: \.self) { tool in
                 ToolbarButton(
                     symbol: tool.showsTextOnly ? nil : tool.symbol,
@@ -297,6 +298,35 @@ private struct StrokeControl: View {
             }
             .padding(12)
             .frame(width: 170)
+        }
+    }
+}
+
+/// A grip that drags the whole window. The window is a full-size content view,
+/// so there is no titlebar strip left to grab.
+private struct WindowDragGrip: View {
+    var body: some View {
+        WindowDragArea()
+            .frame(width: 20, height: 26)
+            .overlay {
+                Image(systemName: "line.3.horizontal")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(.secondary)
+                    .allowsHitTesting(false)
+            }
+            .help("拖动移动窗口")
+    }
+}
+
+/// An invisible AppKit view that moves the window when dragged.
+private struct WindowDragArea: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSView { DragView() }
+
+    func updateNSView(_ nsView: NSView, context: Context) {}
+
+    private final class DragView: NSView {
+        override func mouseDown(with event: NSEvent) {
+            window?.performDrag(with: event)
         }
     }
 }
