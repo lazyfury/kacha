@@ -34,13 +34,13 @@ final class MenuBar {
     func install() {
         // A slightly larger menu-bar glyph: configure the symbol and let the
         // button scale it up as well as down.
-        let configuration = NSImage.SymbolConfiguration(pointSize: 17, weight: .regular)
+        let configuration = NSImage.SymbolConfiguration(pointSize: 18, weight: .regular)
         if let image = NSImage(
             systemSymbolName: "camera.viewfinder",
             accessibilityDescription: "ushot"
         )?.withSymbolConfiguration(configuration) {
             statusItem.button?.image = image
-            statusItem.button?.imageScaling = .scaleProportionallyUpOrDown
+            statusItem.button?.imageScaling = .scaleProportionallyDown
         } else {
             statusItem.button?.title = "◲"
         }
