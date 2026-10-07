@@ -23,15 +23,13 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
             onHotkeyChange: { [weak self] in self?.onHotkeyChange?() }
         )
         let hosting = NSHostingController(rootView: root)
+        // A plain titled window: the native grouped form supplies the window /
+        // card backgrounds and borders; custom chrome would fight them.
         let window = NSWindow(contentViewController: hosting)
-        window.title = "ushot 设置"
-        window.styleMask = [.titled, .closable, .fullSizeContentView]
+        window.title = "设置"
+        window.styleMask = [.titled, .closable]
         window.isReleasedWhenClosed = false
         window.delegate = self
-        // Same seamless, full-size chrome as the editor window.
-        window.titlebarAppearsTransparent = true
-        window.titleVisibility = .hidden
-        window.titlebarSeparatorStyle = .none
         window.setContentSize(hosting.view.fittingSize)
 
         window.center()
