@@ -81,6 +81,18 @@ enum SelfCheck {
         check(mask[2] == CGRect(x: 0, y: 30, width: 20, height: 50), "mask left")
         check(mask[3] == CGRect(x: 60, y: 30, width: 40, height: 50), "mask right")
         check(Selection.maskRects(viewport: viewport, selection: nil)[0] == viewport, "no selection dims all")
+
+        // Every handle is hit at its centre and nowhere else inside the rect.
+        for handle in Selection.Handle.allCases {
+            guard let center = Selection.handleCenters(start).first(where: { $0.0 == handle })?.1
+            else {
+                check(false, "handle \(handle) has a centre")
+                continue
+            }
+            check(Selection.handleAt(start, center) == handle, "handleAt hits \(handle)")
+        }
+        check(Selection.handleAt(start, CGPoint(x: 200, y: 150)) == nil, "handleAt misses the interior")
+        check(Selection.handleAt(start, CGPoint(x: 999, y: 999)) == nil, "handleAt misses outside")
     }
 
     private static func checkCompose(_ check: (Bool, String) -> Void) {
@@ -294,6 +306,18 @@ enum SelfCheck {
             AnnotationPalette.strokePresets.contains { $0.factor == 1 },
             "palette has a standard stroke"
         )
+
+        // Re-editing text must not crash when an undo removed the annotation the
+        // field still points at (the stale-index guard).
+        let editing = EditorState()
+        editing.annotations = [
+            Annotation(tool: .text, points: [.zero], color: [1, 0, 0, 1], stroke: 18, text: "a"),
+        ]
+        check(!editing.replaceText(at: 5, with: "x"), "stale text edit is ignored")
+        check(editing.replaceText(at: 0, with: "b"), "text edit replaces in place")
+        check(editing.annotations[0].text == "b", "text edit wrote the new value")
+        check(editing.replaceText(at: 0, with: ""), "empty text edit deletes")
+        check(editing.annotations.isEmpty, "empty text edit removed the annotation")
     }
 
     /// Every toolbar SF Symbol must resolve, so a typo cannot silently fall back.
@@ -346,6 +370,17 @@ enum SelfCheck {
         check(
             Export.timestampedName().hasPrefix("kacha-") && Export.timestampedName().hasSuffix(".png"),
             "the timestamped name is a kacha PNG"
+        )
+        check(
+            Export.deduplicatedName("kacha", existing: ["kacha"]) == "kacha 2",
+            "a name without an extension still gets a suffix"
+        )
+        check(
+            Export.deduplicatedName(
+                "kacha-20240101-000000.png",
+                existing: ["kacha-20240101-000000.png"]
+            ) == "kacha-20240101-000000 2.png",
+            "a timestamped name gets a suffix before the extension"
         )
     }
 
@@ -422,6 +457,25 @@ enum SelfCheck {
             "audio sources are none / system / microphone / both"
         )
         check(RecordingFrameRate.allCases.map(\.rawValue) == [30, 60], "frame rates are 30 / 60")
+        check(RecordingContainer.mov.fileExtension == "mov", "mov container maps to mov")
+        check(
+            RecordingAudio.none.capturesSystemAudio == false
+                && RecordingAudio.none.capturesMicrophone == false
+                && RecordingAudio.system.capturesSystemAudio
+                && RecordingAudio.system.capturesMicrophone == false
+                && RecordingAudio.microphone.capturesMicrophone
+                && RecordingAudio.microphone.capturesSystemAudio == false
+                && RecordingAudio.systemAndMicrophone.capturesSystemAudio
+                && RecordingAudio.systemAndMicrophone.capturesMicrophone,
+            "audio source flags match the source"
+        )
+        check(
+            RecordingConfig().frameRate == .fps30
+                && RecordingConfig().codec == .h264
+                && RecordingConfig().container == .mp4
+                && RecordingConfig().audio == .none,
+            "recording config defaults are 30 / h264 / mp4 / no audio"
+        )
     }
 
     /// The fallback must always resolve; the exact system capture sound is not a
