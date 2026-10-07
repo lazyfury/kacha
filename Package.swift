@@ -19,6 +19,17 @@ let package = Package(
             name: "UShotMac",
             path: "Sources/UShotMac",
             linkerSettings: [
+                // SwiftPM records the deployment target as the linked SDK version
+                // in `LC_BUILD_VERSION`, which makes macOS treat the app as legacy
+                // and draw the pre-macOS-26 controls. Pin the platform version so
+                // the recorded SDK stays macOS 26 and the app adopts the macOS 26
+                // (Liquid Glass) appearance. minos keeps the 14.0 deployment floor.
+                .unsafeFlags([
+                    "-Xlinker", "-platform_version",
+                    "-Xlinker", "macos",
+                    "-Xlinker", "14.0",
+                    "-Xlinker", "26.0",
+                ]),
                 .linkedFramework("AppKit"),
                 .linkedFramework("Metal"),
                 .linkedFramework("MetalKit"),
