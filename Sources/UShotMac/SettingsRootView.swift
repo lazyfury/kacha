@@ -59,6 +59,7 @@ struct SettingsRootView: View {
         .formStyle(.grouped)
         .frame(width: 460)
         .frame(minHeight: 360)
+        .padding(.top, 12)
     }
 
     private func hotkeyRow(
