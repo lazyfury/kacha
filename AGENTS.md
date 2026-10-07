@@ -46,7 +46,10 @@ macOS 截图工具。**纯 Swift 应用**：AppKit 管窗口 / 原生事件与�
 - **多显示器坐标统一用全局逻辑点，原点左上**（= CoreGraphics 全局坐标）。每个覆盖层减去自己
   `NSScreen.frame` 的 origin 得到局部坐标；选择状态存全局坐标，跨屏选择才成立。
 - **标注的默认线宽 / 字号按图片对角线算**，随截图分辨率缩放；别写死像素值，否则 4K 区域上
-  细到看不见。马赛克块也按线宽派生。
+  细到看不见。marker 工具（高亮 / 马赛克）用 `defaultMarkerStroke`（最小 16px）。
+- **高亮 / 马赛克是「涂抹」工具，不是形状。** 两者都按 freehand 折线累积点；高亮用半透明
+  黄色 + 粗 round-cap 线，马赛克把整图块平均一次（`Mosaic.make`，缓存）后用
+  `replacePathWithStrokedPath()` 裁成粗笔刷再画。别退回成拖矩形。
 - **CGContext 画文字 `position` 是基线（baseline），不是左上角。** 要按字体度量（ascent /
   lineHeight）换算；当成左上角会让文字标注上移 / size 标签溢出。
 

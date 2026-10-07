@@ -19,6 +19,7 @@ enum SelfCheck {
         checkCompose(check)
         checkGeometry(check)
         checkColor(check)
+        checkAnnotations(check)
 
         print(failures == 0 ? "selfcheck: ok" : "selfcheck: \(failures) failure(s)")
         return failures == 0 ? 0 : 1
@@ -82,6 +83,12 @@ enum SelfCheck {
         )
         let crop = Compose.compose([retina], selection: CGRect(x: 10, y: 10, width: 20, height: 10))
         check(crop?.width == 40 && crop?.height == 20, "retina region crops at native scale")
+        if let crop {
+            let mosaic = Mosaic.make(crop, block: 4)
+            check(mosaic != nil, "mosaic image builds")
+            check(mosaic?.width == (crop.width + 3) / 4, "mosaic has one column per block")
+            check(mosaic?.height == (crop.height + 3) / 4, "mosaic has one row per block")
+        }
 
         // Mixed DPI, anchor on the 2x display → output at 2x.
         let retinaLeft = display(
@@ -125,6 +132,89 @@ enum SelfCheck {
         check(defaultTextSize((3840, 2160)) > defaultTextSize((1600, 1000)), "text scales with the image")
         check(defaultStroke((100, 100)) >= 3, "stroke is clamped up")
         check(defaultTextSize((100, 100)) >= 14, "text is clamped up")
+        check(defaultMarkerStroke((3840, 2160)) >= 16, "marker stroke is at least 16px")
+        check(defaultMarkerStroke((100, 100)) >= 16, "marker stroke is clamped to 16px")
+        check(defaultMarkerStroke((3840, 2160)) > defaultMarkerStroke((1600, 1000)), "marker scales")
+        check(mosaicBlock((3840, 2160)) >= 8, "mosaic block is at least 8px")
+    }
+
+    /// The marker tools must actually change the exported pixels.
+    private static func checkAnnotations(_ check: (Bool, String) -> Void) {
+        let colorSpace = CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB()
+        guard
+            let ctx = CGContext(
+                data: nil,
+                width: 40,
+                height: 20,
+                bitsPerComponent: 8,
+                bytesPerRow: 0,
+                space: colorSpace,
+                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+            )
+        else {
+            check(false, "annotation test context")
+            return
+        }
+        ctx.setFillColor(CGColor(srgbRed: 1, green: 0, blue: 0, alpha: 1))
+        ctx.fill(CGRect(x: 0, y: 0, width: 20, height: 20))
+        ctx.setFillColor(CGColor(srgbRed: 0, green: 0, blue: 1, alpha: 1))
+        ctx.fill(CGRect(x: 20, y: 0, width: 20, height: 20))
+        guard let image = ctx.makeImage() else {
+            check(false, "annotation test image")
+            return
+        }
+
+        let source = CapturedDisplay(
+            displayID: 1,
+            origin: .zero,
+            logicalSize: CGSize(width: 20, height: 10),
+            scale: 2,
+            image: image
+        )
+        guard
+            let composed = Compose.compose(
+                [source],
+                selection: CGRect(x: 0, y: 0, width: 20, height: 10)
+            )
+        else {
+            check(false, "annotation test compose")
+            return
+        }
+
+        let session = CaptureSession()
+        session.composed = composed
+        let state = EditorState()
+        let canvas = EditorCanvasView(session: session, state: state)
+        guard let plain = canvas.renderExport() else {
+            check(false, "plain export")
+            return
+        }
+
+        let stroke = defaultMarkerStroke((40, 20))
+        let line = [CGPoint(x: 4, y: 10), CGPoint(x: 36, y: 10)]
+        state.annotations = [
+            Annotation(tool: .mosaic, points: line, color: [1, 0, 0, 1], stroke: stroke, text: ""),
+        ]
+        guard let mosaicked = canvas.renderExport() else {
+            check(false, "mosaic export")
+            return
+        }
+        check(mosaicked != plain, "mosaic changes the exported image")
+
+        state.annotations = [
+            Annotation(
+                tool: .highlighter,
+                points: line,
+                color: [1, 0.9, 0.2, 0.35],
+                stroke: stroke,
+                text: ""
+            ),
+        ]
+        guard let highlighted = canvas.renderExport() else {
+            check(false, "highlighter export")
+            return
+        }
+        check(highlighted != plain, "highlighter changes the exported image")
     }
 
     private static func checkColor(_ check: (Bool, String) -> Void) {

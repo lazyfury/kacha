@@ -146,7 +146,13 @@ final class CaptureSession {
 
 `EditorCanvasView` 在视图坐标与**图像像素坐标**之间做映射（letterbox 缩放 / 平移），标注
 一律存图像像素坐标，所以导出不受画布缩放影响。标注是纯数据模型（`Annotate.swift`），
-绘制时栅格化到 `CGContext`。默认线宽 / 字号按图片对角线派生，随分辨率缩放。
+绘制时栅格化到 `CGContext`。形状 / 画笔的默认线宽、字号按图片对角线派生；高亮 / 马赛克是
+marker 工具，用 `defaultMarkerStroke`（最小 16px）的粗笔刷。
+
+- **高亮**：半透明黄（alpha 0.35）的 freehand 粗线（round cap / join），文字能透出来。
+- **马赛克**：`Mosaic.make` 把整张合成图按 `mosaicBlock` 做一次块平均并缓存，绘制时用
+  `replacePathWithStrokedPath()` 把 freehand 折线变成粗笔刷轮廓 `clip()`，再把块平均图
+  无插值放大画进去。所以是「涂抹」而不是拖矩形，而且每次重绘不重算平均色。
 
 ---
 
@@ -191,7 +197,8 @@ final class CaptureSession {
 
 ## 8. 已知缺口 / 后续
 
-- 标注颜色 / 线宽固定（红 2px），文字固定 18px（按对角线缩放）；没有颜色 / 线宽选择器。
+- 形状 / 画笔固定红色 2px，文字固定 18px（按对角线缩放）；没有颜色 / 线宽选择器。
+  高亮固定半透明黄、马赛克涂抹，宽度按对角线缩放（最小 16px）。
 - 文字提交后不能二次编辑（可撤销）。
 - 窗口拾取不做 app 级分组 / 子窗口选择。
 - 序号 / 椭圆 / 裁剪 / 延时 / OCR / 滚屏长图未做。

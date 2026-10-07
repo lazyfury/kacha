@@ -29,8 +29,8 @@ enum Tool: CaseIterable {
 /// One annotation in image pixel coordinates.
 struct Annotation: Equatable {
     var tool: Tool
-    /// The points that define the shape: a rect two corners, a pen a polyline,
-    /// an arrow start/end, text an origin.
+    /// The points that define the shape: a rect two corners, a pen/highlighter/
+    /// mosaic a polyline, an arrow start/end, text an origin.
     var points: [CGPoint]
     /// RGBA in 0...1.
     var color: [CGFloat]

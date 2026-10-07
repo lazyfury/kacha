@@ -79,6 +79,17 @@ func defaultStroke(_ image: (Int, Int)) -> CGFloat {
     min(max(imageDiagonal(image) / 500, 3), 10)
 }
 
+/// Default brush width for the marker tools (highlighter / mosaic), in image
+/// pixels. Deliberately thick — a marker below 16 px reads as a plain line.
+func defaultMarkerStroke(_ image: (Int, Int)) -> CGFloat {
+    min(max(imageDiagonal(image) / 100, 16), 160)
+}
+
+/// Mosaic cell size for an image, in image pixels.
+func mosaicBlock(_ image: (Int, Int)) -> Int {
+    min(max(Int(imageDiagonal(image) / 120), 8), 64)
+}
+
 /// Default text size for an image, in image pixels.
 func defaultTextSize(_ image: (Int, Int)) -> CGFloat {
     min(max(imageDiagonal(image) / 50, 14), 96)
@@ -98,6 +109,8 @@ final class EditorCanvasView: NSView, NSTextFieldDelegate {
     private var dragging = false
     private var textField: NSTextField?
     private var editingPosition: CGPoint?
+    /// Block-averaged copy of the composed image, built once for the mosaic tool.
+    private var mosaicCache: (block: Int, image: CGImage)?
 
     init(session: CaptureSession, state: EditorState) {
         self.session = session
@@ -256,54 +269,91 @@ final class EditorCanvasView: NSView, NSTextFieldDelegate {
         ctx.restoreGState()
     }
 
+    /// Paint the mosaic along the annotation's stroke. The whole image is
+    /// block-averaged once (cached) and then clipped to the thick brush path,
+    /// so the tool paints rather than dragging a rectangle.
     private func drawMosaic(
         _ ctx: CGContext,
         _ annotation: Annotation,
         imageRect: CGRect,
         image: (Int, Int)
     ) {
-        guard let composed = session.composed else { return }
-        let (w, h) = (composed.width, composed.height)
-        let pixels = composed.pixels
-        guard w > 0, h > 0, pixels.count >= w * h * 4 else { return }
-        guard let rect = rectFrom(annotation.points.map { toScreen(imageRect, image, $0) }) else {
+        guard let composed = session.composed, !annotation.points.isEmpty else { return }
+        let block = mosaicBlock((composed.width, composed.height))
+        let mosaic: CGImage
+        if let cache = mosaicCache, cache.block == block {
+            mosaic = cache.image
+        } else if let made = Mosaic.make(composed, block: block) {
+            mosaicCache = (block, made)
+            mosaic = made
+        } else {
             return
         }
-        let minX = max(rect.minX, imageRect.minX)
-        let minY = max(rect.minY, imageRect.minY)
-        let maxX = min(rect.maxX, imageRect.maxX)
-        let maxY = min(rect.maxY, imageRect.maxY)
-        guard maxX > minX, maxY > minY else { return }
 
-        let block = max(annotation.stroke * 6, 4)
-        let start = toImage(imageRect, image, CGPoint(x: minX, y: minY))
-        let end = toImage(imageRect, image, CGPoint(x: maxX, y: maxY))
-        var y = max(start.y, 0)
-        while y < min(end.y, CGFloat(h)) {
-            var x = max(start.x, 0)
-            while x < min(end.x, CGFloat(w)) {
-                let blockRect = CGRect(
-                    x: x,
-                    y: y,
-                    width: min(x + block, CGFloat(w)) - x,
-                    height: min(y + block, CGFloat(h)) - y
-                )
-                if let color = averageColor(pixels, w: w, h: h, rect: blockRect) {
-                    let dest = CGRect(
-                        origin: toScreen(imageRect, image, blockRect.origin),
-                        size: CGSize(
-                            width: blockRect.width / CGFloat(w) * imageRect.width,
-                            height: blockRect.height / CGFloat(h) * imageRect.height
-                        )
-                    )
-                    ctx.setFillColor(color)
-                    ctx.fill(dest)
-                }
-                x += block
+        let scale = imageRect.width / CGFloat(max(composed.width, 1))
+        let brush = max(annotation.stroke * scale, 6)
+        let points = annotation.points.map { toScreen(imageRect, image, $0) }
+
+        ctx.saveGState()
+        ctx.beginPath()
+        if points.count == 1 {
+            let radius = brush / 2
+            ctx.addEllipse(
+                in: CGRect(x: points[0].x - radius, y: points[0].y - radius, width: brush, height: brush)
+            )
+        } else {
+            ctx.move(to: points[0])
+            for point in points.dropFirst() {
+                ctx.addLine(to: point)
             }
-            y += block
+            ctx.setLineWidth(brush)
+            ctx.setLineCap(.round)
+            ctx.setLineJoin(.round)
+            ctx.replacePathWithStrokedPath()
+        }
+        ctx.clip()
+
+        // Draw the block-averaged image upright, with no smoothing for hard squares.
+        ctx.interpolationQuality = .none
+        ctx.translateBy(x: imageRect.minX, y: imageRect.maxY)
+        ctx.scaleBy(x: 1, y: -1)
+        ctx.draw(mosaic, in: CGRect(x: 0, y: 0, width: imageRect.width, height: imageRect.height))
+        ctx.restoreGState()
+    }
+
+    /// A fresh draft for `tool`. The marker tools get a thick brush and the
+    /// highlighter also gets a translucent colour instead of the plain stroke.
+    private func makeDraft(tool: Tool, at start: CGPoint, image: (Int, Int)) -> Annotation {
+        switch tool {
+        case .highlighter:
+            return Annotation(
+                tool: tool,
+                points: [start],
+                color: Self.highlighterColor,
+                stroke: defaultMarkerStroke(image),
+                text: ""
+            )
+        case .mosaic:
+            return Annotation(
+                tool: tool,
+                points: [start],
+                color: state.color,
+                stroke: defaultMarkerStroke(image),
+                text: ""
+            )
+        default:
+            return Annotation(
+                tool: tool,
+                points: [start],
+                color: state.color,
+                stroke: state.stroke,
+                text: ""
+            )
         }
     }
+
+    /// Semi-transparent highlighter yellow.
+    private static let highlighterColor: [CGFloat] = [1.0, 0.90, 0.20, 0.35]
 
     // MARK: - Mouse
 
@@ -318,13 +368,7 @@ final class EditorCanvasView: NSView, NSTextFieldDelegate {
             beginText(at: start)
             return
         }
-        state.draft = Annotation(
-            tool: state.tool,
-            points: [start],
-            color: state.color,
-            stroke: state.stroke,
-            text: ""
-        )
+        state.draft = makeDraft(tool: state.tool, at: start, image: image)
         dragging = true
         needsDisplay = true
     }
@@ -336,7 +380,7 @@ final class EditorCanvasView: NSView, NSTextFieldDelegate {
             image
         )
         switch draft.tool {
-        case .pen, .highlighter:
+        case .pen, .highlighter, .mosaic:
             draft.points.append(point)
         default:
             if draft.points.count < 2 {
@@ -363,7 +407,7 @@ final class EditorCanvasView: NSView, NSTextFieldDelegate {
     private func isRenderable(_ annotation: Annotation) -> Bool {
         guard annotation.points.count >= 2 else { return false }
         switch annotation.tool {
-        case .pen, .highlighter:
+        case .pen, .highlighter, .mosaic:
             return true
         default:
             let a = annotation.points[0]
@@ -461,8 +505,8 @@ func makeFont(_ size: CGFloat) -> CTFont {
     return CTFontCreateWithName(name as CFString, size, nil)
 }
 
-/// The average colour of a pixel rectangle in an RGBA8 image.
-func averageColor(_ source: [UInt8], w: Int, h: Int, rect: CGRect) -> CGColor? {
+/// The average RGB of a pixel rectangle in an RGBA8 image.
+func averageRGB(_ source: [UInt8], w: Int, h: Int, rect: CGRect) -> (UInt8, UInt8, UInt8)? {
     let x0 = max(Int(rect.minX.rounded(.down)), 0)
     let y0 = max(Int(rect.minY.rounded(.down)), 0)
     let x1 = min(Int(rect.maxX.rounded(.up)), w)
@@ -481,10 +525,51 @@ func averageColor(_ source: [UInt8], w: Int, h: Int, rect: CGRect) -> CGColor? {
         }
     }
     guard n > 0 else { return nil }
-    return CGColor(
-        srgbRed: CGFloat(r) / CGFloat(n) / 255,
-        green: CGFloat(g) / CGFloat(n) / 255,
-        blue: CGFloat(b) / CGFloat(n) / 255,
-        alpha: 1
-    )
+    return (UInt8(r / n), UInt8(g / n), UInt8(b / n))
+}
+
+/// Builds a block-averaged copy of an image: one output pixel per `block`×`block`
+/// of source, later drawn with no interpolation to get hard mosaic squares.
+enum Mosaic {
+    static func make(_ composed: ComposedImage, block: Int) -> CGImage? {
+        let w = composed.width
+        let h = composed.height
+        guard w > 0, h > 0, block > 0, composed.pixels.count >= w * h * 4 else { return nil }
+        let cols = (w + block - 1) / block
+        let rows = (h + block - 1) / block
+        var buffer = [UInt8](repeating: 0, count: cols * rows * 4)
+        for row in 0..<rows {
+            for col in 0..<cols {
+                let x0 = col * block
+                let y0 = row * block
+                let rect = CGRect(
+                    x: x0,
+                    y: y0,
+                    width: min(x0 + block, w) - x0,
+                    height: min(y0 + block, h) - y0
+                )
+                guard let rgb = averageRGB(composed.pixels, w: w, h: h, rect: rect) else { continue }
+                let index = (row * cols + col) * 4
+                buffer[index] = rgb.0
+                buffer[index + 1] = rgb.1
+                buffer[index + 2] = rgb.2
+                buffer[index + 3] = 255
+            }
+        }
+        let colorSpace = CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB()
+        guard
+            let ctx = CGContext(
+                data: &buffer,
+                width: cols,
+                height: rows,
+                bitsPerComponent: 8,
+                bytesPerRow: cols * 4,
+                space: colorSpace,
+                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+            )
+        else {
+            return nil
+        }
+        return ctx.makeImage()
+    }
 }
