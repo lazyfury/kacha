@@ -1,7 +1,8 @@
 // "Pin to screen": floating windows showing an exported image.
 //
 // A pinned image is a static bitmap. The window is borderless and floats above
-// other apps, but it is fully interactive: drag anywhere to move it, hover the
+// other apps, but it is fully interactive: drag anywhere to move it, drag a
+// corner to resize (aspect-locked, so the image never distorts), hover the
 // top-left for a close button, right-click for copy/save/close, double-click or
 // Escape to close. Large images are scaled down to fit the screen.
 
@@ -19,11 +20,30 @@ final class PinView: NSView {
     private let image: NSImage
     private let png: Data
     private var hovering = false
+
+    // Move state.
     private var dragAnchor: NSPoint?
     private var originAnchor: NSPoint?
+    // Resize state.
+    private var resize: Resize?
 
     private static let closeSize: CGFloat = 20
     private static let closeInset: CGFloat = 8
+    private static let cornerMargin: CGFloat = 14
+    private static let minSize = NSSize(width: 80, height: 60)
+
+    /// An in-progress corner resize: the fixed opposite corner, the start
+    /// vector from it to the grabbed corner, and the start size.
+    private struct Resize {
+        let anchor: NSPoint
+        let dx: CGFloat
+        let dy: CGFloat
+        let size: NSSize
+    }
+
+    private enum Corner {
+        case topLeft, topRight, bottomLeft, bottomRight
+    }
 
     init(image: NSImage, png: Data, frame: NSRect) {
         self.image = image
@@ -61,9 +81,27 @@ final class PinView: NSView {
         )
     }
 
+    override func resetCursorRects() {
+        super.resetCursorRects()
+        let m = Self.cornerMargin
+        for rect in [
+            CGRect(x: 0, y: bounds.height - m, width: m, height: m),
+            CGRect(x: bounds.width - m, y: bounds.height - m, width: m, height: m),
+            CGRect(x: 0, y: 0, width: m, height: m),
+            CGRect(x: bounds.width - m, y: 0, width: m, height: m),
+        ] where rect.width > 0 && rect.height > 0 {
+            addCursorRect(rect, cursor: .crosshair)
+        }
+    }
+
     override func draw(_ dirtyRect: NSRect) {
         image.draw(in: bounds, from: .zero, operation: .sourceOver, fraction: 1)
         guard hovering, let ctx = NSGraphicsContext.current?.cgContext else { return }
+        drawCloseButton(ctx)
+        drawResizeGrip(ctx)
+    }
+
+    private func drawCloseButton(_ ctx: CGContext) {
         let circle = closeRect
         ctx.setFillColor(NSColor(calibratedWhite: 0, alpha: 0.55).cgColor)
         ctx.fillEllipse(in: circle)
@@ -75,6 +113,23 @@ final class PinView: NSView {
         ctx.addLine(to: CGPoint(x: cross.maxX, y: cross.maxY))
         ctx.move(to: CGPoint(x: cross.maxX, y: cross.minY))
         ctx.addLine(to: CGPoint(x: cross.minX, y: cross.maxY))
+        ctx.strokePath()
+    }
+
+    /// Three diagonal lines in the bottom-right corner, the classic grip.
+    private func drawResizeGrip(_ ctx: CGContext) {
+        let inset: CGFloat = 6
+        let length: CGFloat = 14
+        ctx.setStrokeColor(NSColor.white.withAlphaComponent(0.85).cgColor)
+        ctx.setLineWidth(2)
+        ctx.setLineCap(.round)
+        let x = bounds.width - inset
+        let y = inset
+        for step in 0..<3 {
+            let offset = CGFloat(step) * 5
+            ctx.move(to: CGPoint(x: x - length + offset, y: y))
+            ctx.addLine(to: CGPoint(x: x, y: y + length - offset))
+        }
         ctx.strokePath()
     }
 
@@ -93,29 +148,62 @@ final class PinView: NSView {
     // MARK: - Mouse
 
     override func mouseDown(with event: NSEvent) {
-        if closeRect.contains(convert(event.locationInWindow, from: nil)) {
+        let point = convert(event.locationInWindow, from: nil)
+        if closeRect.contains(point) {
             window?.close()
             return
         }
+        if let window, let corner = corner(at: NSEvent.mouseLocation, in: window.frame) {
+            resize = resizeState(for: corner, frame: window.frame)
+            dragAnchor = nil
+            originAnchor = nil
+            return
+        }
+        resize = nil
         dragAnchor = NSEvent.mouseLocation
         originAnchor = window?.frame.origin
     }
 
     override func mouseDragged(with event: NSEvent) {
-        guard let dragAnchor, let originAnchor, let window else { return }
-        let current = NSEvent.mouseLocation
+        guard let window else { return }
+        let mouse = NSEvent.mouseLocation
+        if let resize {
+            let dx = mouse.x - resize.anchor.x
+            let raw = resize.dx == 0 ? 1 : dx / resize.dx
+            let minScale = max(
+                Self.minSize.width / resize.size.width,
+                Self.minSize.height / resize.size.height
+            )
+            let scale = max(raw, minScale)
+            let corner = CGPoint(
+                x: resize.anchor.x + resize.dx * scale,
+                y: resize.anchor.y + resize.dy * scale
+            )
+            window.setFrame(
+                NSRect(
+                    x: min(resize.anchor.x, corner.x),
+                    y: min(resize.anchor.y, corner.y),
+                    width: abs(corner.x - resize.anchor.x),
+                    height: abs(corner.y - resize.anchor.y)
+                ),
+                display: true
+            )
+            return
+        }
+        guard let dragAnchor, let originAnchor else { return }
         window.setFrameOrigin(
             NSPoint(
-                x: originAnchor.x + (current.x - dragAnchor.x),
-                y: originAnchor.y + (current.y - dragAnchor.y)
+                x: originAnchor.x + (mouse.x - dragAnchor.x),
+                y: originAnchor.y + (mouse.y - dragAnchor.y)
             )
         )
     }
 
     override func mouseUp(with event: NSEvent) {
-        if event.clickCount == 2 {
+        if resize == nil && event.clickCount == 2 {
             window?.close()
         }
+        resize = nil
         dragAnchor = nil
         originAnchor = nil
     }
@@ -161,6 +249,45 @@ final class PinView: NSView {
 
     @objc private func closePin() {
         window?.close()
+    }
+
+    /// Which corner of `frame` (screen coordinates) `point` is near.
+    private func corner(at point: CGPoint, in frame: NSRect) -> Corner? {
+        let m = Self.cornerMargin
+        let left = point.x - frame.minX <= m
+        let right = frame.maxX - point.x <= m
+        let bottom = point.y - frame.minY <= m
+        let top = frame.maxY - point.y <= m
+        if left && top { return .topLeft }
+        if right && top { return .topRight }
+        if left && bottom { return .bottomLeft }
+        if right && bottom { return .bottomRight }
+        return nil
+    }
+
+    private func resizeState(for corner: Corner, frame: NSRect) -> Resize {
+        let anchor: CGPoint
+        let grab: CGPoint
+        switch corner {
+        case .topLeft:
+            anchor = CGPoint(x: frame.maxX, y: frame.minY)
+            grab = CGPoint(x: frame.minX, y: frame.maxY)
+        case .topRight:
+            anchor = CGPoint(x: frame.minX, y: frame.minY)
+            grab = CGPoint(x: frame.maxX, y: frame.maxY)
+        case .bottomLeft:
+            anchor = CGPoint(x: frame.maxX, y: frame.maxY)
+            grab = CGPoint(x: frame.minX, y: frame.minY)
+        case .bottomRight:
+            anchor = CGPoint(x: frame.minX, y: frame.maxY)
+            grab = CGPoint(x: frame.maxX, y: frame.minY)
+        }
+        return Resize(
+            anchor: anchor,
+            dx: grab.x - anchor.x,
+            dy: grab.y - anchor.y,
+            size: frame.size
+        )
     }
 }
 

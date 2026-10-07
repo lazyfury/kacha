@@ -185,9 +185,9 @@ marker 工具，用 `defaultMarkerStroke`（最小 16px）的粗笔刷。
 ### 4.9 钉图
 
 钉图是 `PinWindow`（borderless + `.floating`）里放 `PinView`：静态画 `NSImage`，悬停才在
-左上角画关闭按钮。交互全在 `PinView`：拖拽改窗口 origin、双击 / `Esc` 关闭、右键菜单
-（复制 / 保存 / 关闭）；大图按屏幕 80% 缩放，窗口用 `orderFrontRegardless()` 展示以免抢焦点。
-菜单栏提供「关闭所有钉图」。
+左上角画关闭按钮、右下角画缩放手柄。交互全在 `PinView`：拖拽改窗口 origin、拖四角缩放
+（居中锁宽高比，锚在对面角，最小 80×60）、双击 / `Esc` 关闭、右键菜单（复制 / 保存 / 关闭）；
+大图按屏幕 80% 缩放，窗口用 `orderFrontRegardless()` 展示以免抢焦点。菜单栏提供「关闭所有钉图」。
 
 ---
 
