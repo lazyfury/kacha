@@ -105,6 +105,7 @@ private struct EditorToolbar: View {
                 disabled: false,
                 showsLabel: true,
                 primary: true,
+                iconOffsetY: -4,
                 action: onSave
             )
             ToolbarButton(
@@ -145,6 +146,8 @@ private struct ToolbarButton: View {
     let disabled: Bool
     var showsLabel = false
     var primary = false
+    /// Visual nudge for the icon (points); some glyphs sit optically low.
+    var iconOffsetY: CGFloat = 0
     let action: () -> Void
 
     private var filled: Bool { active || primary }
@@ -155,6 +158,7 @@ private struct ToolbarButton: View {
                 if let symbol {
                     Image(systemName: symbol)
                         .font(.system(size: 14, weight: .medium))
+                        .offset(y: iconOffsetY)
                 }
                 if showsLabel {
                     Text(title)
