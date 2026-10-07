@@ -100,13 +100,14 @@ kacha/
 │   │   │   ├── PinWindows.swift        # 钉图悬浮窗
 │   │   │   ├── ColorPicker.swift       # 放大镜 + 像素取样 + hex
 │   │   │   └── WindowChrome.swift      # 窗口 chrome / isReleasedWhenClosed 统一设置
-│   │   │   └── CountdownHUD.swift      # 延时截图的居中倒计时面板
+│   │   │   └── CountdownHUD.swift      # 倒计时面板（NSHostingView 宿主）
 │   │   │   └── RecordingBar.swift      # 录屏悬浮控制栏（NSPanel 宿主）
 │   │   └── SwiftUI/              # NSHostingView 承载的 chrome
 │   │       ├── EditorRootView.swift     # 编辑窗：玻璃工具栏 + 画布 representable
 │   │       ├── OCRResultView.swift      # OCR 识别结果 sheet（可编辑 / 复制）
 │   │       ├── BarcodeResultView.swift  # 二维码 / 条码结果 sheet（逐条复制）
 │   │       ├── RecordingBarView.swift   # 录屏控制栏 SwiftUI（计时 / 停止 / 取消）
+│   │       ├── CountdownView.swift      # 倒计时圆盘 + 录制前麦克风开关
 │   │       ├── SettingsWindow.swift     # 设置窗（NSWindow 宿主）
 │   │       ├── SettingsRootView.swift   # 设置窗：系统设置风侧边栏 / 分组按钮 / 卡片
 │   │       └── HotkeyRecorderView.swift # 热键录制按钮 + 本地 NSEvent 监听
@@ -274,9 +275,11 @@ Core Image 的 `CIQRCodeGenerator` 生成一个 QR 再解码断言（`--smoke-ba
 
 菜单栏「延时截图」提供 3 / 5 / 10 秒预设（写进 `Preferences.delaySeconds`，设置窗同
 步一个 Picker）。选定后 `CountdownHUD` 在鼠标所在屏幕中央开一个半透明圆盘倒数，
-每秒重绘一次 `CountdownView`；归零时先 `cancel()`（`orderOut` 掉面板）再冻结屏幕，
-保证倒计时本身不会进冻帧（面板也开了 `sharingType = .none` 双保险）。面板是
-`.nonactivatingPanel + ignoresMouseEvents`，不抢焦点、不挡交互，用户可继续摆屏。
+每秒更新一次 `CountdownModel`（SwiftUI `CountdownView`）；归零时先 `cancel()`（`orderOut`
+掉面板）再冻结屏幕，保证倒计时本身不会进冻帧（面板也开了 `sharingType = .none` 双保险）。
+面板是 `.nonactivatingPanel`，默认 `ignoresMouseEvents`（延时截图不挡交互）；**录屏倒数时**
+会多一个麦克风开关（`micAvailable`），此时接受点击，在开始录制前就能决定麦克风开关，
+状态带进录制。
 
 ### 4.13 录屏
 
@@ -304,6 +307,8 @@ Core Image 的 `CIQRCodeGenerator` 生成一个 QR 再解码断言（`--smoke-ba
   录制中用 mute 标志跳过采样实现实时开关；停止后用 `RecordingMuxer`（`AVMutableComposition`
   + `AVAssetExportSession` 直通）把视频和麦克风合流，并按主机时钟偏移对齐。需要打包 `.app`
   且 `Info.plist` 有 `NSMicrophoneUsageDescription`，裸二进制不启用（否则请求权限会崩）。
+  设置窗「录制」页显示麦克风权限状态（`MicrophonePermission`：已允许 / 已拒绝 / 未授权 /
+  不可用），可一键请求权限或打开系统设置。
 - **单会话**：确认录制目标后 `recordingActive` 置位，直到录制结束；期间菜单栏录屏项禁用
   （标题改「正在录制…」），再按热键 / 菜单直接返回。状态栏图标**不变**——系统已自带录制指示，
   再换图标只会多一个重复的“stop”。

@@ -49,6 +49,7 @@ struct SettingsRootView: View {
     @State private var playSound = Preferences.playSound
     @State private var delaySeconds = Preferences.delaySeconds
     @State private var saveDirectory = Preferences.saveDirectory
+    @State private var micStatus = MicrophonePermission.status
 
     private var loginAvailable: Bool { LaunchAtLogin.isAvailable }
 
@@ -181,6 +182,7 @@ struct SettingsRootView: View {
                     Text($0.label).tag($0)
                 }
             }
+            micPermissionRow
             recordingPicker("开始前倒数", selection: $recording.countdown) {
                 ForEach(Preferences.countdownChoices, id: \.self) {
                     Text($0 == 0 ? "关闭" : "\($0) 秒").tag($0)
@@ -190,6 +192,40 @@ struct SettingsRootView: View {
                 .toggleStyle(.switch)
             Toggle("点击高亮", isOn: $recording.showClicks)
                 .toggleStyle(.switch)
+        }
+        .onAppear { micStatus = MicrophonePermission.status }
+    }
+
+    /// The microphone TCC state, with a request / open-settings action.
+    private var micPermissionRow: some View {
+        LabeledContent {
+            HStack(spacing: 8) {
+                switch micStatus {
+                case .notDetermined:
+                    Button("请求权限", action: requestMic)
+                case .denied, .restricted:
+                    Button("打开系统设置") { MicrophonePermission.openSystemSettings() }
+                case .authorized, .unavailable:
+                    EmptyView()
+                }
+            }
+        } label: {
+            VStack(alignment: .leading, spacing: 3) {
+                Text("麦克风权限")
+                Text(micStatusText)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private var micStatusText: String {
+        switch micStatus {
+        case .authorized: return "已允许。"
+        case .denied: return "已拒绝，请在系统设置里允许后重试。"
+        case .restricted: return "受系统限制。"
+        case .notDetermined: return "尚未授权；开始录制时也会弹出系统提示。"
+        case .unavailable: return "不可用：请从打包的 .app 运行。"
         }
     }
 
@@ -297,6 +333,13 @@ struct SettingsRootView: View {
                 Preferences.delaySeconds = newValue
             }
         )
+    }
+
+    private func requestMic() {
+        Task {
+            _ = await MicrophonePermission.request()
+            micStatus = MicrophonePermission.status
+        }
     }
 
     private func resetHotkeys() {

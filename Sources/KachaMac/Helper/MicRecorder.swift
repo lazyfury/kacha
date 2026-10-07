@@ -24,14 +24,14 @@ final class MicRecorder: NSObject, @unchecked Sendable {
     /// bundle; without it (e.g. the bare binary) requesting access crashes, so
     /// the feature is disabled.
     static var isSupported: Bool {
-        Bundle.main.object(forInfoDictionaryKey: "NSMicrophoneUsageDescription") != nil
+        MicrophonePermission.status != .unavailable
     }
 
     /// Start capturing the microphone into `url`. Returns false when the mic is
     /// unavailable or access was denied.
     func start(to url: URL) async -> Bool {
         guard Self.isSupported else { return false }
-        guard await Self.requestAccess() else { return false }
+        guard await MicrophonePermission.request() else { return false }
         return await withCheckedContinuation { continuation in
             queue.async {
                 do {
@@ -109,17 +109,6 @@ final class MicRecorder: NSObject, @unchecked Sendable {
         self.sessionStarted = false
         self.firstSampleTime = .invalid
         self.muted = false
-    }
-
-    private static func requestAccess() async -> Bool {
-        switch AVCaptureDevice.authorizationStatus(for: .audio) {
-        case .authorized:
-            return true
-        case .notDetermined:
-            return await AVCaptureDevice.requestAccess(for: .audio)
-        default:
-            return false
-        }
     }
 }
 

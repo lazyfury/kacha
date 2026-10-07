@@ -24,7 +24,8 @@ macOS 截图工具。**纯 Swift**：AppKit 管窗口、Core Graphics 画界面�
 - **录制屏幕**（默认 `⌘⇧R`，macOS 15+）：区域 / 窗口 / 整屏录成 mp4 / mov。复用冻结 +
   覆盖层选区；确认后弹悬浮控制栏（计时 / 停止 / 取消，麦克风实时开关）。窗口录制**不依赖顶层**，
   被遮挡的窗口也能录。设置里可选帧率 / 编码 / 容器 / 音频来源 / 倒数 / 光标 / 点击高亮；
-  有保存目录就直写，否则停止后弹保存面板。麦克风是独立采集（需打包 `.app`）。录制中菜单项
+  有保存目录就直写，否则停止后弹保存面板。麦克风是独立采集（需打包 `.app`）；开始录制前的
+  倒数面板里就能开关麦克风，设置「录制」页还有麦克风权限状态与请求入口。录制中菜单项
   禁用并显示「正在录制…」，不能开新会话。
 - **取色器**（默认 `⌘⇧C`）：在冻帧上取样，放大镜 + hex 读数；点击或 `Enter` 复制 hex，
   `Esc` 取消。
@@ -74,6 +75,7 @@ Sources/KachaMac/
     OCRResultView.swift   OCR 识别结果 sheet（可编辑 / 复制）
     BarcodeResultView.swift 二维码 / 条码结果 sheet（逐条复制）
     RecordingBarView.swift 录屏控制栏 SwiftUI（计时 / 停止 / 取消）
+    CountdownView.swift   倒计时圆盘 + 录制前麦克风开关
     SettingsWindow.swift  设置窗（NSWindow 宿主）
     SettingsRootView.swift 设置窗 SwiftUI：系统设置风侧边栏 + 分组按钮 + 卡片
     HotkeyRecorderView.swift SwiftUI 热键录制按钮 + 本地 NSEvent 监听

@@ -28,6 +28,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var recorder: AnyObject?
     private var micRecorder: MicRecorder?
     private var micMuted = false
+    /// The microphone state chosen during the pre-recording countdown.
+    private var countdownMicMuted = false
     /// Host-clock time the video started, to align a separate microphone track.
     private var recordingStartedAt: CMTime = .invalid
     /// True from the moment a recording target is confirmed until it ends, so a
@@ -288,12 +290,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func beginRecording(_ target: RecordingTarget) {
         guard #available(macOS 15.0, *) else { return }
         let config = Preferences.recordingConfig
-        countdown.start(seconds: config.countdown) { [weak self] in
-            self?.startRecordingNow(target, config: config)
-        }
+        let micAvailable = config.audio == .microphone && MicRecorder.isSupported
+        countdownMicMuted = false
+        countdown.start(
+            seconds: config.countdown,
+            micAvailable: micAvailable,
+            micMuted: false,
+            onToggleMic: { [weak self] in
+                guard let self else { return }
+                self.countdownMicMuted.toggle()
+                self.countdown.setMicMuted(self.countdownMicMuted)
+            },
+            onFinish: { [weak self] in
+                self?.startRecordingNow(
+                    target,
+                    config: config,
+                    micMuted: self?.countdownMicMuted ?? false
+                )
+            }
+        )
     }
 
-    private func startRecordingNow(_ target: RecordingTarget, config: RecordingConfig) {
+    private func startRecordingNow(
+        _ target: RecordingTarget,
+        config: RecordingConfig,
+        micMuted: Bool
+    ) {
         guard #available(macOS 15.0, *) else { return }
         let recorder = ScreenRecorder()
         self.recorder = recorder
@@ -302,7 +324,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             .appendingPathComponent("kacha-mic-\(UUID().uuidString).m4a")
         let mic = config.audio == .microphone ? MicRecorder() : nil
         self.micRecorder = mic
-        self.micMuted = false
+        self.micMuted = micMuted
 
         Task { @MainActor in
             do {
@@ -322,6 +344,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             var micStarted = false
             if let mic {
                 micStarted = await mic.start(to: micURL)
+                mic.setMuted(micMuted)
             }
 
             recorder.onFinish = { result in
@@ -340,7 +363,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 mic.setMuted(self.micMuted)
                 self.recordingBar.setMicMuted(self.micMuted)
             }
-            self.recordingBar.setMicMuted(false)
+            self.recordingBar.setMicMuted(micMuted)
             self.recordingBar.show(micAvailable: micStarted, elapsed: { recorder.elapsed })
         }
     }

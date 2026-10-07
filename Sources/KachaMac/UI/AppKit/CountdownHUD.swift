@@ -1,40 +1,50 @@
-// A small centred countdown shown before a delayed capture.
+// A small centred countdown shown before a delayed capture or a recording.
 //
 // The panel is owned by the app, so ScreenCaptureKit excludes it from the frozen
-// frame. It never takes focus (`nonactivatingPanel`, `ignoresMouseEvents`), so
-// the user can keep arranging the screen while it runs.
+// frame. It never takes focus, and stays click-through unless it carries a
+// microphone toggle.
 
 import AppKit
+import SwiftUI
 
 @MainActor
 final class CountdownHUD {
     private var panel: NSPanel?
-    private var view: CountdownView?
     private var timer: Timer?
+    private let model = CountdownModel()
     private var remaining = 0
     private var onFinish: (() -> Void)?
+    private var onToggleMic: (() -> Void)?
 
     /// Count down from `seconds`, then run `onFinish` on the main actor. Zero or
-    /// less finishes immediately, so the caller needs no special case.
-    func start(seconds: Int, onFinish: @escaping () -> Void) {
+    /// less finishes immediately, so the caller needs no special case. When
+    /// `micAvailable`, a microphone toggle is shown and clicks are accepted.
+    func start(
+        seconds: Int,
+        micAvailable: Bool = false,
+        micMuted: Bool = false,
+        onToggleMic: (() -> Void)? = nil,
+        onFinish: @escaping () -> Void
+    ) {
         cancel()
         guard seconds > 0 else {
             onFinish()
             return
         }
         self.onFinish = onFinish
+        self.onToggleMic = onToggleMic
         remaining = seconds
+        model.number = seconds
+        model.micMuted = micMuted
 
-        let side: CGFloat = 96
-        let view = CountdownView(number: seconds)
-        let screen = NSScreen.screens.first { $0.frame.contains(NSEvent.mouseLocation) }
-            ?? NSScreen.main
-        let origin = screen.map { screen in
-            CGPoint(x: screen.frame.midX - side / 2, y: screen.frame.midY - side / 2)
-        } ?? .zero
-
+        let root = CountdownView(
+            model: model,
+            micAvailable: micAvailable,
+            onToggleMic: { [weak self] in self?.onToggleMic?() }
+        )
+        let hosting = NSHostingController(rootView: root)
         let panel = NSPanel(
-            contentRect: CGRect(origin: origin, size: CGSize(width: side, height: side)),
+            contentRect: NSRect(x: 0, y: 0, width: 96, height: micAvailable ? 140 : 96),
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: false
@@ -45,30 +55,37 @@ final class CountdownHUD {
         panel.isOpaque = false
         panel.backgroundColor = .clear
         panel.hasShadow = false
-        panel.ignoresMouseEvents = true
         panel.animationBehavior = .none
         // Never let the countdown leak into a capture of our own overlay.
         panel.sharingType = .none
-        panel.contentView = view
+        // The microphone toggle needs clicks; otherwise stay out of the way.
+        panel.ignoresMouseEvents = !micAvailable
+        panel.contentView = hosting.view
+        hosting.view.layoutSubtreeIfNeeded()
+        panel.setContentSize(hosting.view.fittingSize)
+        position(panel)
         panel.orderFrontRegardless()
-
-        self.view = view
         self.panel = panel
 
-        timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] timer in
-            // The timer is scheduled on the main run loop, so this is the main actor.
+        timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
+            // The timer runs on the main run loop, so this is the main actor.
             MainActor.assumeIsolated {
-                self?.tick(timer)
+                self?.tick()
             }
         }
     }
 
-    private func tick(_ timer: Timer) {
+    /// Reflect the microphone's mute state on the toggle.
+    func setMicMuted(_ muted: Bool) {
+        model.micMuted = muted
+    }
+
+    private func tick() {
         remaining -= 1
-        view?.number = remaining
-        view?.needsDisplay = true
+        model.number = max(remaining, 0)
         if remaining <= 0 {
-            timer.invalidate()
+            timer?.invalidate()
+            timer = nil
             let finish = onFinish
             cancel()
             finish?()
@@ -81,43 +98,23 @@ final class CountdownHUD {
         timer = nil
         panel?.orderOut(nil)
         panel = nil
-        view = nil
         onFinish = nil
+        onToggleMic = nil
         remaining = 0
     }
-}
 
-/// The countdown disc: a translucent dark circle with a big white number.
-private final class CountdownView: NSView {
-    var number: Int
-
-    init(number: Int) {
-        self.number = number
-        super.init(frame: NSRect(x: 0, y: 0, width: 96, height: 96))
-    }
-
-    @available(*, unavailable)
-    required init?(coder: NSCoder) { fatalError("CountdownView is created programmatically") }
-
-    override var isFlipped: Bool { true }
-
-    override func draw(_ dirtyRect: NSRect) {
-        guard let ctx = NSGraphicsContext.current?.cgContext else { return }
-        let disc = bounds.insetBy(dx: 2, dy: 2)
-        ctx.setFillColor(NSColor(calibratedWhite: 0.08, alpha: 0.72).cgColor)
-        ctx.fillEllipse(in: disc)
-        ctx.setStrokeColor(NSColor(calibratedWhite: 1, alpha: 0.25).cgColor)
-        ctx.setLineWidth(1)
-        ctx.strokeEllipse(in: disc)
-
-        let text = NSAttributedString(
-            string: "\(number)",
-            attributes: [
-                .font: NSFont.systemFont(ofSize: 44, weight: .semibold),
-                .foregroundColor: NSColor.white,
-            ]
+    /// Centre of the display under the cursor.
+    private func position(_ panel: NSPanel) {
+        let screen = NSScreen.screens.first { $0.frame.contains(NSEvent.mouseLocation) }
+            ?? NSScreen.main
+        guard let screen else {
+            panel.center()
+            return
+        }
+        let frame = screen.frame
+        let size = panel.frame.size
+        panel.setFrameOrigin(
+            CGPoint(x: frame.midX - size.width / 2, y: frame.midY - size.height / 2)
         )
-        let size = text.size()
-        text.draw(at: CGPoint(x: bounds.midX - size.width / 2, y: bounds.midY - size.height / 2))
     }
 }
